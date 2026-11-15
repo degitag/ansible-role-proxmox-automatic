@@ -25,4 +25,8 @@ unter `/dev/disk/by-id/`. Die Rolle akzeptiert leere Datenträger sowie bereits
 zum aktiven Ceph-FSID gehörige OSDs. Bei fremden Signaturen oder Partitionen
 bricht sie ab. Der optionale `proxmox_ceph_rbd_pool` konfiguriert einen
 replizierten Pool mit drei Kopien und Mindestgröße zwei und registriert ihn als
-Proxmox-Storage. Anschließend prüft die Rolle OSDs und Placement Groups.
+Proxmox-Storage. Vor der Registrierung prüft die Rolle die RBD-Anwendung,
+PG-Autoscaling und die CRUSH-Regel für drei Kopien auf verschiedenen Hosts.
+Bei abweichender Platzierung bricht sie ab, damit ein vorhandener Pool
+keine unerwartete Datenverschiebung auslöst. Anschließend prüft die Rolle
+OSDs und Placement Groups.

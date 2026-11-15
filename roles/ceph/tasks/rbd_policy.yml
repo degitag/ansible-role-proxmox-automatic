@@ -1,0 +1,42 @@
+---
+- name: Read RBD pool parameters
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, pool, get, "{{ proxmox_ceph_rbd_pool }}", all, --format, json]
+  become: true
+  register: _proxmox_ceph_pool_parameters
+  changed_when: false
+
+- name: Read the CRUSH rule assigned to the RBD pool
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, crush, rule, dump, "{{ _pool.crush_rule }}", --format, json]
+  become: true
+  register: _proxmox_ceph_pool_rule
+  changed_when: false
+  vars:
+    _pool: "{{ _proxmox_ceph_pool_parameters.stdout | from_json }}"
+
+- name: Read applications enabled on the RBD pool
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, pool, application, get, "{{ proxmox_ceph_rbd_pool }}", --format, json]
+  become: true
+  register: _proxmox_ceph_pool_applications
+  changed_when: false
+
+- name: Require RBD and three replicas on distinct hosts with a minimum of two
+  ansible.builtin.assert:
+    that:
+    - _pool.size == 3
+    - _pool.min_size == 2
+    - _pool.pg_autoscale_mode == 'on'
+    - "'rbd' in (_proxmox_ceph_pool_applications.stdout | from_json)"
+    - _rule.type == 1
+    - _rule.steps | map(attribute='op') | list == ['take', 'chooseleaf_firstn', 'emit']
+    - _rule.steps[1].type == 'host'
+    - _rule.steps[1].num in [0, 3]
+    fail_msg: >-
+      The managed RBD pool must have RBD enabled, PG autoscaling on and
+      three replicas on distinct hosts with min_size=2.
+      Review the existing pool and CRUSH rule before adopting it.
+  vars:
+    _pool: "{{ _proxmox_ceph_pool_parameters.stdout | from_json }}"
+    _rule: "{{ _proxmox_ceph_pool_rule.stdout | from_json }}"

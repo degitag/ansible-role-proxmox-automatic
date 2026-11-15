@@ -27,16 +27,8 @@
   changed_when: true
   when: proxmox_ceph_rbd_pool not in (_proxmox_ceph_pools.stdout | from_json)
 
-- name: Verify RBD pool parameters
-  ansible.builtin.command:
-    argv: [timeout, '10', ceph, osd, pool, get, "{{ proxmox_ceph_rbd_pool }}", all, --format, json]
-  become: true
-  register: _proxmox_ceph_pool
-  changed_when: false
-  failed_when: >-
-    _proxmox_ceph_pool.rc != 0 or
-    (_proxmox_ceph_pool.stdout | from_json).size != 3 or
-    (_proxmox_ceph_pool.stdout | from_json).min_size != 2
+- name: Verify the replicated RBD placement and application
+  ansible.builtin.import_tasks: rbd_policy.yml
 
 - name: Read Proxmox storage definitions
   ansible.builtin.command:
