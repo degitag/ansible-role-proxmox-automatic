@@ -24,7 +24,12 @@ allen Knoten im selben Play verwenden. Je Knoten die lokalen
 `proxmox_cluster_links` angeben. `proxmox_cluster_seed` benennt den Seed im
 Inventory. `proxmox_cluster_seed_address` ist dessen SSH-Ziel. Standalone-Knoten
 benötigen einen geprüften SSH-Hostschlüssel für dieses Ziel und vorab
-eingerichteten nichtinteraktiven Root-Zugriff auf den Seed.
+eingerichteten nichtinteraktiven Root-Zugriff auf den Seed. Mit
+`proxmox_cluster_manage_join_trust: true` übernimmt der Bootstrap darauf
+aufbauend die Join-Schlüssel. Der Controller muss die SSH-Hostschlüssel
+aller Knoten bereits verifizieren. Die Rolle liest den Host-Public-Key des
+Seeds über diese Verbindung und autorisiert die öffentlichen Root-Schlüssel
+der Standalone-Kandidaten im Proxmox-Schlüsselspeicher des Seeds.
 
 Der Bootstrap stoppt bei widersprüchlicher Mitgliedschaft, fehlendem Quorum
 oder Gästen auf einem Beitrittskandidaten. Im Check-Modus laufen die

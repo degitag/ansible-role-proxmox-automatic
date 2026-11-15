@@ -37,3 +37,7 @@ argument_specs:
         elements: str
         required: true
         description: Local Corosync addresses in order of preference.
+      proxmox_cluster_manage_join_trust:
+        type: bool
+        default: false
+        description: Set up root join keys and pin the seed host key for standalone candidates.
