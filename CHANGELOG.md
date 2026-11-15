@@ -6,6 +6,7 @@
 - Ceph-Einstieg für Paketinstallation, IPv6-Netzprüfung und Monitor-/Manager-Dienste sowie OSDs und replizierten RBD-Storage.
 - Eigenständige OpenFabric-Rolle für IPv6-SDN und Erreichbarkeitsprüfung zwischen Knoten.
 - Thunderbolt-Rolle für persistente Schnittstellen und Ceph-Ethernet-Fallback.
+- Clusterweite Verwaltung von OpenID-Realms und Gruppenrechten.
 
 ## [0.2.0] - 2026-10-27
 

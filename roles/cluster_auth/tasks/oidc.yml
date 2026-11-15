@@ -1,0 +1,45 @@
+---
+- name: Read existing OIDC configuration including the confidential client setting
+  ansible.builtin.command:
+    argv: [pvesh, get, "/access/domains/{{ _proxmox_auth_oidc.name }}", --output-format, json]
+  register: _proxmox_auth_existing_oidc
+  check_mode: false
+  changed_when: false
+  no_log: true
+  when: _proxmox_auth_oidc.name in (_proxmox_auth_domains.stdout | from_json | map(attribute='realm'))
+
+- name: Converge OIDC realm settings
+  vars:
+    _existing: "{{ _proxmox_auth_existing_oidc.stdout | default('{}') | from_json }}"
+    _public:
+      issuer-url: "{{ _proxmox_auth_oidc.issuer }}"
+      client-id: "{{ _proxmox_auth_oidc.client_id }}"
+      autocreate: "{{ _proxmox_auth_oidc.autocreate | default(false) | int }}"
+      scopes: "{{ _proxmox_auth_oidc.scopes | default('email profile') }}"
+    _desired: >-
+      {{ _public | combine({'client-key': _proxmox_auth_oidc.client_secret}
+         if _proxmox_auth_oidc.client_secret is defined else {}) }}
+    _actual: >-
+      {{ {'autocreate': _existing.autocreate | default(0) | int, 'scopes': _existing.scopes | default('email profile')}
+         | combine(_existing) }}
+    _username_claim: "{{ _proxmox_auth_oidc.username_claim | default('sub') }}"
+  no_log: true
+  block:
+  - name: Verify an existing realm uses the intended backend
+    ansible.builtin.assert:
+      that:
+      - _existing.type | default('openid') == 'openid'
+      - _existing['username-claim'] | default('sub') == _username_claim
+      fail_msg: Existing realm uses a different backend or immutable username claim.
+    when: _existing | length > 0
+
+  - name: Apply desired OpenID Connect realm properties
+    ansible.builtin.command:
+      expand_argument_vars: false
+      argv: >-
+        {{ ['pveum', 'realm', 'modify' if _existing else 'add', _proxmox_auth_oidc.name]
+         + ([] if _existing else ['--type', 'openid', '--username-claim', _username_claim])
+         + (_desired.keys() | map('regex_replace', '^', '--') |
+            zip(_desired.values() | map('string')) | flatten) }}
+    changed_when: true
+    when: _desired | dict2items | difference(_actual | dict2items) | length > 0
