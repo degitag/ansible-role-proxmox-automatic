@@ -1,0 +1,9 @@
+{{ ansible_managed | comment }}
+
+[Match]
+Path={{ item.path }}
+Driver=thunderbolt-net
+
+[Link]
+Name={{ item.name }}
+MTUBytes={{ proxmox_thunderbolt_mtu }}

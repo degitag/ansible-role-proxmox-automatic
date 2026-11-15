@@ -1,0 +1,5 @@
+# Thunderbolt interfaces can appear after networking.service has completed.
+# Start configuration only after the stable interface name has been assigned.
+{% for link in proxmox_thunderbolt_links %}
+ACTION=="add|move", SUBSYSTEM=="net", KERNEL=="{{ link.name }}", TAG+="systemd", ENV{SYSTEMD_WANTS}+="pve-thunderbolt-ifup@{{ link.name }}.service"
+{% endfor %}

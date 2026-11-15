@@ -1,0 +1,34 @@
+---
+- name: Verify the Thunderbolt link list and MTU
+  ansible.builtin.assert:
+    that:
+    - proxmox_thunderbolt_links | length > 0
+    - proxmox_thunderbolt_links | map(attribute='name') | unique | length == proxmox_thunderbolt_links | length
+    - proxmox_thunderbolt_links | map(attribute='path') | unique | length == proxmox_thunderbolt_links | length
+    - proxmox_thunderbolt_mtu | int >= 1500
+    - proxmox_thunderbolt_mtu | int <= 65535
+
+- name: Validate Thunderbolt link naming inputs
+  ansible.builtin.assert:
+    that:
+    - item.name is match('^en[a-zA-Z0-9]{1,13}$')
+    - item.path is match('^pci-[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}[.][0-7]$')
+  loop: "{{ proxmox_thunderbolt_links }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Verify that existing interface names match the configured PCI paths
+  ansible.builtin.command:
+    argv: [udevadm, info, --query, property, --path, "/sys/class/net/{{ item.name }}"]
+  loop: "{{ proxmox_thunderbolt_links }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _proxmox_thunderbolt_udev
+  check_mode: false
+  changed_when: false
+  failed_when: >-
+    (_proxmox_thunderbolt_udev.rc == 0 and
+      ('ID_PATH=' ~ item.path not in _proxmox_thunderbolt_udev.stdout_lines or
+       'ID_NET_DRIVER=thunderbolt-net' not in _proxmox_thunderbolt_udev.stdout_lines)) or
+    (_proxmox_thunderbolt_udev.rc != 0 and
+      'Unknown device' not in _proxmox_thunderbolt_udev.stderr)
