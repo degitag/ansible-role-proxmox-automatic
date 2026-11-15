@@ -363,6 +363,7 @@ Konfigurationsdateien, lokale ISOs und Manifeste erhalten `0600`, Arbeitsverzeic
 | `degitag.proxmox.cluster_auth` | OIDC-Realms, Benutzer, Gruppen und ACLs verwalten |
 | `degitag.proxmox.cluster_certificates` | PEM-Import und Proxmox-ACME-Zertifikate je Knoten verwalten |
 | `degitag.proxmox.cluster_resources` | Zentrale Sicherheitsgruppen, Aliase, IP-Sets und explizite Cluster-Regeln unabhängig von VMs verwalten |
+| `degitag.proxmox.host_network` | Management-Netz, LACP und VLANs mit Rollback verwalten |
 | `degitag.proxmox.host_install_media` | Unbeaufsichtigte Proxmox-VE-Installationsmedien für physische Hosts erstellen |
 | `degitag.proxmox.install_media` | Kickstart-Konfigurations-CD beziehungsweise remastertes Debian-ISO erzeugen und hochladen |
 | `degitag.proxmox.vm` | VM-Hardware erstellen, Installer starten und Bootreihenfolge steuern |

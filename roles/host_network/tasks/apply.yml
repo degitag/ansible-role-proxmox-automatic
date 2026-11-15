@@ -1,0 +1,80 @@
+---
+- name: Create a protected rollback workspace
+  ansible.builtin.tempfile:
+    state: directory
+    path: /run
+    prefix: pve-role-network-
+  register: _proxmox_host_network_stage
+  changed_when: false
+
+- name: Stage the intended configuration and validate it with ifupdown2
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: "{{ _proxmox_host_network_stage.path }}/candidate"
+    mode: '0600'
+    validate: /usr/sbin/ifquery -i %s -a
+  changed_when: false
+
+- name: Preserve the current interfaces file
+  ansible.builtin.copy:
+    src: /etc/network/interfaces
+    dest: "{{ _proxmox_host_network_stage.path }}/previous"
+    remote_src: true
+    mode: '0600'
+  changed_when: false
+
+- name: Schedule independent rollback in case the configuration disconnects Ansible
+  ansible.builtin.command:
+    argv:
+    - systemd-run
+    - "--unit={{ _rollback_unit }}"
+    - --on-active=100s
+    - /bin/sh
+    - -c
+    - 'install -m 0644 "$1" /etc/network/interfaces && /usr/sbin/ifreload -a'
+    - sh
+    - "{{ _proxmox_host_network_stage.path }}/previous"
+  vars:
+    _rollback_unit: "{{ _proxmox_host_network_stage.path | basename }}"
+  changed_when: false
+
+- name: Install the validated interface configuration
+  ansible.builtin.copy:
+    src: "{{ _proxmox_host_network_stage.path }}/candidate"
+    dest: /etc/network/interfaces
+    remote_src: true
+    mode: '0644'
+
+- name: Reload networking without rebooting the host
+  ansible.builtin.command:
+    argv: [/usr/sbin/ifreload, -a]
+  changed_when: true
+
+- name: Wait for Ansible connectivity after network reload
+  ansible.builtin.wait_for_connection:
+    timeout: 25
+
+- name: Verify the new configuration before cancelling rollback
+  ansible.builtin.import_tasks: verify.yml
+
+- name: Cancel pending automatic rollback
+  ansible.builtin.systemd_service:
+    name: "{{ _proxmox_host_network_stage.path | basename }}.timer"
+    state: stopped
+  changed_when: false
+
+- name: Read the persistent file after cancelling rollback
+  ansible.builtin.stat:
+    path: /etc/network/interfaces
+    checksum_algorithm: sha1
+  register: _proxmox_host_network_applied
+
+- name: Confirm the rollback timer did not replace the applied file
+  ansible.builtin.assert:
+    that: _proxmox_host_network_applied.stat.checksum == (lookup('ansible.builtin.template', 'interfaces.j2') | hash('sha1'))
+
+- name: Remove the completed network rollout workspace
+  ansible.builtin.file:
+    path: "{{ _proxmox_host_network_stage.path }}"
+    state: absent
+  changed_when: false

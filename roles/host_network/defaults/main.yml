@@ -1,0 +1,5 @@
+---
+proxmox_host_network_vlans: []
+proxmox_host_network_manual_links: []
+proxmox_host_network_bridge_mtu: 1500
+proxmox_host_network_bridge_vids: 2-4094

@@ -1,0 +1,70 @@
+---
+argument_specs:
+  main:
+    short_description: Configure persistent Proxmox management, LACP and VLAN networks
+    options:
+      proxmox_host_network_node:
+        type: str
+        required: true
+        description: Expected local Proxmox node name.
+      proxmox_host_network_management:
+        type: dict
+        required: true
+        description: Dedicated management interface and static addresses.
+        options:
+          interface:
+            type: str
+            required: true
+            description: Physical untagged management port.
+          ipv4:
+            type: str
+            required: true
+            description: Management IPv4 address with its prefix.
+          ipv4_gateway:
+            type: str
+            required: true
+            description: Management IPv4 gateway.
+          ipv6:
+            type: str
+            required: true
+            description: Management IPv6 address with its prefix.
+          ipv6_gateway:
+            type: str
+            required: true
+            description: Management IPv6 gateway.
+      proxmox_host_network_bond:
+        type: str
+        required: true
+        description: LACP bond interface name.
+      proxmox_host_network_bond_ports:
+        type: list
+        elements: str
+        required: true
+        description: Physical interfaces assigned to the LACP bond.
+      proxmox_host_network_bridge:
+        type: str
+        required: true
+        description: VLAN-aware bridge backed by the bond.
+      proxmox_host_network_bridge_mtu:
+        type: int
+        description: MTU of the data interfaces, bond and bridge.
+      proxmox_host_network_bridge_vids:
+        type: str
+        description: VLAN IDs or ranges accepted by the VLAN-aware bridge.
+      proxmox_host_network_manual_links:
+        type: list
+        elements: str
+        description: Additional interfaces exposed for SDN, such as Thunderbolt links.
+      proxmox_host_network_vlans:
+        type: list
+        elements: dict
+        description: Static IPv6 host interfaces on tagged VLANs.
+        options:
+          id:
+            type: int
+            required: true
+            description: IEEE 802.1Q VLAN ID.
+          ipv6:
+            type: str
+            required: true
+            description: Node IPv6 address and prefix on this VLAN.

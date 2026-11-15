@@ -9,6 +9,7 @@
 - Clusterweite Verwaltung von OpenID-Realms und Gruppenrechten.
 - Knoten-Zertifikatsrolle für PEM-Import, ACME und HTTPS-Prüfung.
 - Rolle zur Erzeugung geprüfter, hostbezogener Proxmox-VE-Installationsmedien.
+- Persistente Hostnetze für Proxmox mit Management, LACP, VLANs und unabhängigem Rollback.
 
 ## [0.2.0] - 2026-10-27
 
