@@ -1,0 +1,14 @@
+---
+argument_specs:
+  main:
+    short_description: Inspect and validate Proxmox cluster membership
+    options:
+      proxmox_cluster_name:
+        type: str
+        default: ''
+        description: Expected Corosync cluster name. Empty runs the audit without a desired topology.
+      proxmox_cluster_nodes:
+        type: list
+        elements: str
+        default: []
+        description: Exact set of expected Proxmox node names.

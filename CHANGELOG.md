@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Eigenständige Rolle zur lesenden Prüfung von Proxmox-Mitgliedschaft und Quorum.
+
 ## [0.2.0] - 2026-10-27
 
 - Gemeinsamer Vertrag `degitag-collections-v1` mit Infrastructure, Database, Monitoring und K3s abgestimmt.
