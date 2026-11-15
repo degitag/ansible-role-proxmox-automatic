@@ -1,0 +1,91 @@
+---
+- name: Read registered ACME accounts
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/acme/account, --output-format, json]
+  check_mode: false
+  changed_when: false
+  register: _proxmox_cert_accounts
+
+- name: Register a missing ACME account
+  ansible.builtin.include_tasks: register.yml
+  when: proxmox_cert_account not in (_proxmox_cert_accounts.stdout | from_json | map(attribute='name'))
+
+- name: Read the configured ACME account directory
+  ansible.builtin.command:
+    argv: [pvesh, get, "/cluster/acme/account/{{ proxmox_cert_account }}", --output-format, json]
+  register: _proxmox_cert_account_info
+  no_log: true
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or proxmox_cert_account in (_proxmox_cert_accounts.stdout | from_json | map(attribute='name'))
+
+- name: Verify the CA directory matches the intended account configuration
+  ansible.builtin.assert:
+    that: (_proxmox_cert_account_info.stdout | from_json).directory == proxmox_cert_directory
+  when: not _proxmox_cert_account_info.skipped | default(false)
+  no_log: true
+
+- name: Read challenge plugins without exposing their credentials
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/acme/plugins, --output-format, json]
+  register: _proxmox_cert_plugins
+  no_log: true
+  changed_when: false
+  check_mode: false
+
+- name: Verify an existing challenge plugin has the intended type and driver
+  ansible.builtin.assert:
+    that:
+    - item.type == ('standalone' if proxmox_cert_plugin == 'standalone' else 'dns')
+    - proxmox_cert_dns_api is not defined or item.api | default('') == proxmox_cert_dns_api
+  loop: "{{ _proxmox_cert_plugins.stdout | from_json | selectattr('plugin', 'equalto', proxmox_cert_plugin) | list }}"
+  no_log: true
+
+- name: Create missing DNS challenge plugin
+  ansible.builtin.include_tasks: dns_plugin.yml
+  when:
+  - proxmox_cert_plugin not in (_proxmox_cert_plugins.stdout | from_json | map(attribute='plugin'))
+  - not ansible_check_mode
+
+- name: Read node ACME settings
+  ansible.builtin.command:
+    argv: [pvesh, get, "/nodes/{{ proxmox_cert_node }}/config", --output-format, json]
+  register: _proxmox_cert_node_config
+  changed_when: false
+  check_mode: false
+
+- name: Set the account and primary domain on the node
+  ansible.builtin.command:
+    argv:
+    - pvenode
+    - config
+    - set
+    - --acme
+    - "{{ _proxmox_cert_account_value }}"
+    - --acmedomain0
+    - "{{ _proxmox_cert_domain_value }}"
+  vars:
+    _config: "{{ _proxmox_cert_node_config.stdout | from_json }}"
+    _proxmox_cert_account_value: "account={{ proxmox_cert_account }}"
+    _proxmox_cert_domain_value: "{{ proxmox_cert_hostname }},plugin={{ proxmox_cert_plugin }}"
+  when: >-
+    _config.acme | default('') != _proxmox_cert_account_value or
+    _config.acmedomain0 | default('') != _proxmox_cert_domain_value
+  register: _proxmox_cert_acme_settings
+  changed_when: true
+
+- name: Order an ACME certificate when absent or explicitly replacing a different certificate
+  ansible.builtin.command:
+    argv: [pvenode, acme, cert, order, --force, "{{ proxmox_cert_replace | bool | int | string }}"]
+  changed_when: true
+  when: >-
+    not _proxmox_cert_installed or
+    (proxmox_cert_replace | bool and
+      (_proxmox_cert_acme_settings.changed or
+       proxmox_cert_hostname not in _proxmox_cert_installed.san | default([])))
+
+- name: Verify native scheduled certificate renewal is active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, pve-daily-update.timer]
+  check_mode: false
+  changed_when: false

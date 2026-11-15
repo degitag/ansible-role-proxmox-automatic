@@ -1,0 +1,78 @@
+---
+- name: Stage, validate and install custom TLS materials
+  when: not ansible_check_mode
+  block:
+  - name: Create protected remote staging directory
+    ansible.builtin.tempfile:
+      state: directory
+      prefix: pve-cert-
+    register: _proxmox_cert_stage
+    changed_when: false
+
+  - name: Stage the custom leaf and chain
+    ansible.builtin.copy:
+      src: "{{ proxmox_cert_chain_path }}"
+      dest: "{{ _proxmox_cert_stage.path }}/chain.pem"
+      mode: '0600'
+    changed_when: false
+
+  - name: Stage the optional private CA certificate
+    ansible.builtin.copy:
+      src: "{{ proxmox_cert_ca_path }}"
+      dest: "{{ _proxmox_cert_stage.path }}/ca.pem"
+      mode: '0600'
+    changed_when: false
+    when: proxmox_cert_ca_path is defined
+
+  - name: Validate certificate chain, server purpose, hostname and expiration
+    ansible.builtin.command:
+      argv: >-
+        {{ ['openssl', 'verify', '-x509_strict', '-purpose', 'sslserver', '-verify_hostname', proxmox_cert_hostname,
+            '-untrusted', _chain] +
+           (['-CAfile', _proxmox_cert_stage.path ~ '/ca.pem'] if proxmox_cert_ca_path is defined else []) +
+           [_chain] }}
+    vars:
+      _chain: "{{ _proxmox_cert_stage.path }}/chain.pem"
+    changed_when: false
+
+  - name: Read candidate TLS certificate fingerprint
+    ansible.builtin.command:
+      argv: [openssl, x509, -in, "{{ _proxmox_cert_stage.path }}/chain.pem", -noout, -sha256, -fingerprint]
+    register: _proxmox_cert_candidate
+    changed_when: false
+
+  - name: Require explicit replacement of a different custom certificate
+    ansible.builtin.assert:
+      that: not _proxmox_cert_installed or proxmox_cert_replace | bool
+    when: _fingerprint | lower != _proxmox_cert_installed.fingerprint | default('') | lower
+    vars:
+      _fingerprint: "{{ _proxmox_cert_candidate.stdout_lines | last | split('=') | last }}"
+
+  - name: Install certificate only when fingerprint changes
+    when: _fingerprint | lower != _proxmox_cert_installed.fingerprint | default('') | lower
+    vars:
+      _fingerprint: "{{ _proxmox_cert_candidate.stdout_lines | last | split('=') | last }}"
+    block:
+    - name: Stage the private key with restricted permissions
+      ansible.builtin.copy:
+        src: "{{ proxmox_cert_key_path }}"
+        dest: "{{ _proxmox_cert_stage.path }}/key.pem"
+        mode: '0600'
+      no_log: true
+      changed_when: false
+
+    - name: Install the custom certificate and restart the node proxy
+      ansible.builtin.command:
+        argv: [pvenode, cert, set, "{{ _proxmox_cert_stage.path }}/chain.pem",
+               "{{ _proxmox_cert_stage.path }}/key.pem", --restart, '1',
+               --force, "{{ proxmox_cert_replace | bool | int | string }}"]
+      no_log: true
+      changed_when: true
+
+  always:
+  - name: Remove the remote TLS staging directory
+    ansible.builtin.file:
+      path: "{{ _proxmox_cert_stage.path }}"
+      state: absent
+    changed_when: false
+    when: _proxmox_cert_stage.path is defined

@@ -1,0 +1,5 @@
+---
+proxmox_cert_directory: https://acme-v02.api.letsencrypt.org/directory
+proxmox_cert_account: default
+proxmox_cert_plugin: standalone
+proxmox_cert_replace: false

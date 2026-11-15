@@ -1,0 +1,61 @@
+---
+- name: Reconcile Proxmox TLS certificates
+  become: true
+  any_errors_fatal: true
+  block:
+  - name: Read local cluster status for certificate reconciliation
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/status, --output-format, json]
+    register: _proxmox_cert_status
+    check_mode: false
+    changed_when: false
+
+  - name: Validate target cluster and node
+    ansible.builtin.assert:
+      that:
+      - _status | selectattr('type', 'equalto', 'cluster') | selectattr('name', 'equalto', proxmox_cert_cluster) |
+        selectattr('quorate', 'equalto', 1) | list | length == 1
+      - _status | selectattr('type', 'equalto', 'node') | selectattr('name', 'equalto', proxmox_cert_node) |
+        selectattr('local', 'equalto', 1) | list | length == 1
+      - proxmox_cert_hostname is match('^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$')
+      - proxmox_cert_source != 'custom' or (proxmox_cert_chain_path is defined and proxmox_cert_key_path is defined)
+    vars:
+      _status: "{{ _proxmox_cert_status.stdout | from_json }}"
+
+  - name: Read existing externally supplied node certificate
+    ansible.builtin.command:
+      argv: [pvenode, cert, info, --output-format, json]
+    check_mode: false
+    changed_when: false
+    register: _proxmox_cert_info
+
+  - name: Identify installed custom or ACME certificate
+    ansible.builtin.set_fact:
+      _proxmox_cert_installed: >-
+        {{ (_proxmox_cert_info.stdout | from_json | selectattr('filename', 'equalto', 'pveproxy-ssl.pem') |
+            list | first) | default({}) }}
+
+  - name: Manage custom certificate and key
+    ansible.builtin.include_tasks: custom.yml
+    when: proxmox_cert_source == 'custom'
+
+  - name: Manage node ACME settings
+    ansible.builtin.include_tasks: acme.yml
+    when: proxmox_cert_source == 'acme'
+
+  - name: Verify the TLS chain and hostname through the HTTPS endpoint
+    ansible.builtin.uri:
+      url: "https://{{ proxmox_cert_hostname }}:8006/"
+      ca_path: "{{ proxmox_cert_ca_path | default(omit) }}"
+      use_proxy: false
+      validate_certs: true
+      timeout: 5
+      status_code: 200
+    delegate_to: localhost
+    become: false
+    check_mode: false
+    register: _proxmox_cert_https
+    retries: 15
+    delay: 4
+    until: _proxmox_cert_https.status | default(-1) == 200
+    when: not ansible_check_mode
