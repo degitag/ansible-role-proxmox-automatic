@@ -8,9 +8,8 @@ Management-Adresse, einen Root-Passworthash und SSH-Public-Keys. Das
 Zielsystemlaufwerk wird anhand des exakten Udev-Werts `ID_SERIAL_SHORT`
 ausgewählt. Der Managementport wird anhand seiner MAC identifiziert.
 
-Die nativen Kommandos `device-info` und `device-match` können vor dem
-Booten auf dem Zielhost prüfen, ob jeweils genau das erwartete Gerät
-passt. Ein Boot vom generierten Medium installiert Proxmox auf dem
+Vor dem Booten prüft `tasks_from: verify_hardware` auf dem Zielhost mit
+dem nativen `device-match`, ob die Filter jeweils genau ein Gerät ergeben. Ein Boot vom generierten Medium installiert Proxmox auf dem
 angegebenen Systemlaufwerk. Das Medium lässt sich über USB, virtuelle
 Medien oder eine Test-VM bereitstellen. Host-VLANs und Cluster-Aufbau
 folgen nach dem ersten Start.

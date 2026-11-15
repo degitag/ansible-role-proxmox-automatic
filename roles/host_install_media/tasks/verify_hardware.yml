@@ -1,0 +1,29 @@
+---
+- name: Validate exact installation device filters
+  ansible.builtin.assert:
+    that:
+    - proxmox_host_installer_management_mac is match('^(?:[a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$')
+    - proxmox_host_installer_disk_serial is match('^[A-Za-z0-9._:-]+$')
+
+- name: Resolve each installer filter to exactly one device on the target host
+  ansible.builtin.command:
+    argv: ["{{ proxmox_host_installer_assistant }}", device-match, --filter-match, all, "{{ item.type }}", "{{ item.filter }}"]
+  loop:
+  - type: disk
+    filter: "ID_SERIAL_SHORT={{ proxmox_host_installer_disk_serial }}"
+  - type: network
+    filter: "ID_NET_NAME_MAC=enx{{ proxmox_host_installer_management_mac | lower | replace(':', '') }}"
+  register: _proxmox_host_installer_match
+  check_mode: false
+  changed_when: false
+  failed_when: >-
+    _proxmox_host_installer_match.rc != 0 or
+    (_proxmox_host_installer_match.stdout | from_json | length) != 1
+  loop_control:
+    label: "{{ item.type }}"
+
+- name: Report resolved installation devices
+  ansible.builtin.debug:
+    msg:
+      system_disk: "{{ _proxmox_host_installer_match.results[0].stdout | from_json | first }}"
+      management_interface: "{{ _proxmox_host_installer_match.results[1].stdout | from_json | first }}"

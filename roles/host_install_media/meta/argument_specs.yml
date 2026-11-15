@@ -68,3 +68,17 @@ argument_specs:
         type: str
         choices: [ext4, xfs]
         description: Local system disk filesystem.
+  verify_hardware:
+    short_description: Verify exact installer filters on the target host
+    options:
+      proxmox_host_installer_assistant:
+        type: path
+        description: Path to the Proxmox Automated Installation Assistant on the target host.
+      proxmox_host_installer_management_mac:
+        type: str
+        required: true
+        description: Permanent hardware MAC of the management network interface.
+      proxmox_host_installer_disk_serial:
+        type: str
+        required: true
+        description: Exact ID_SERIAL_SHORT of the intended system disk.
