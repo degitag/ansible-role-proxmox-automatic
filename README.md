@@ -357,6 +357,7 @@ Konfigurationsdateien, lokale ISOs und Manifeste erhalten `0600`, Arbeitsverzeic
 |---|---|
 | `degitag.proxmox.deploy` | Vorprüfung, Installation, Verifikation und Abschluss koordinieren |
 | `degitag.proxmox.cluster` | Mitgliedschaft, Online-Status und Quorum pro Knoten prüfen |
+| `degitag.proxmox.openfabric` | IPv6-OpenFabric und Knoten über Proxmox SDN konfigurieren |
 | `degitag.proxmox.ceph` | Ceph Tentacle installieren und Monitor-/Manager-Dienste einrichten |
 | `degitag.proxmox.cluster_resources` | Zentrale Sicherheitsgruppen, Aliase, IP-Sets und explizite Cluster-Regeln unabhängig von VMs verwalten |
 | `degitag.proxmox.install_media` | Kickstart-Konfigurations-CD beziehungsweise remastertes Debian-ISO erzeugen und hochladen |

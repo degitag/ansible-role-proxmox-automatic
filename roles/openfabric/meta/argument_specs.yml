@@ -1,0 +1,38 @@
+---
+argument_specs:
+  main:
+    short_description: Configure and verify Proxmox IPv6 OpenFabric
+    options:
+      proxmox_openfabric_id:
+        type: str
+        required: true
+        description: Proxmox SDN fabric identifier.
+      proxmox_openfabric_cluster:
+        type: str
+        required: true
+        description: Expected Proxmox cluster name.
+      proxmox_openfabric_prefix:
+        type: str
+        required: true
+        description: IPv6 prefix for fabric node addresses.
+      proxmox_openfabric_address:
+        type: str
+        required: true
+        description: The local fabric node IPv6 address.
+      proxmox_openfabric_interfaces:
+        type: list
+        elements: dict
+        required: true
+        description: Local interfaces participating in OpenFabric.
+        options:
+          name:
+            type: str
+            required: true
+            description: Stable name of the interface.
+          ip6:
+            type: str
+            description: Optional interface IPv6 address in Proxmox format.
+      proxmox_openfabric_apply:
+        type: bool
+        default: false
+        description: Apply the entire pending Proxmox SDN configuration after staging.

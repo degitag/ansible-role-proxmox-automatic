@@ -1,0 +1,38 @@
+---
+- name: Read configured nodes for this fabric
+  ansible.builtin.command:
+    argv: [pvesh, get, "/cluster/sdn/fabrics/node/{{ proxmox_openfabric_id }}", --output-format, json]
+  become: true
+  register: _proxmox_openfabric_nodes
+  changed_when: false
+
+- name: Build desired interface properties
+  ansible.builtin.set_fact:
+    _proxmox_openfabric_node_interfaces: >-
+      {{ _proxmox_openfabric_node_interfaces | default([]) +
+         ['name=' ~ item.name ~ (',ip6=' ~ item.ip6 if item.ip6 is defined else '')] }}
+  loop: "{{ hostvars[_proxmox_openfabric_node].proxmox_openfabric_interfaces }}"
+
+- name: Verify existing OpenFabric node address and interfaces
+  ansible.builtin.assert:
+    that:
+    - item.protocol == 'openfabric'
+    - item.ip6 == hostvars[_proxmox_openfabric_node].proxmox_openfabric_address
+    - item.interfaces | sort == _proxmox_openfabric_node_interfaces | sort
+  loop: "{{ _proxmox_openfabric_nodes.stdout | from_json | selectattr('node_id', 'equalto', _proxmox_openfabric_node) | list }}"
+
+- name: Stage missing OpenFabric node
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pvesh', 'create', '/cluster/sdn/fabrics/node/' ~ proxmox_openfabric_id,
+          '--node_id', _proxmox_openfabric_node, '--protocol', 'openfabric', '--ip6',
+          hostvars[_proxmox_openfabric_node].proxmox_openfabric_address] +
+         ((['--interfaces'] * (_proxmox_openfabric_node_interfaces | length)) |
+          zip(_proxmox_openfabric_node_interfaces) | flatten) }}
+  become: true
+  changed_when: true
+  when: _proxmox_openfabric_node not in (_proxmox_openfabric_nodes.stdout | from_json | map(attribute='node_id') | list)
+
+- name: Reset interface arguments for the next fabric node
+  ansible.builtin.set_fact:
+    _proxmox_openfabric_node_interfaces: []

@@ -1,0 +1,52 @@
+---
+- name: Read fabric configuration
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/sdn/fabrics/all, --output-format, json]
+  become: true
+  check_mode: false
+  changed_when: false
+  register: _proxmox_openfabric_config
+
+- name: Verify an existing fabric matches the desired protocol and prefix
+  ansible.builtin.assert:
+    that:
+    - item.protocol == 'openfabric'
+    - item.ip6_prefix == proxmox_openfabric_prefix
+  loop: >-
+    {{ (_proxmox_openfabric_config.stdout | from_json).fabrics |
+       selectattr('id', 'equalto', proxmox_openfabric_id) | list }}
+
+- name: Stage the OpenFabric definition
+  ansible.builtin.command:
+    argv: [pvesh, create, /cluster/sdn/fabrics/fabric, --id, "{{ proxmox_openfabric_id }}",
+           --protocol, openfabric, --ip6_prefix, "{{ proxmox_openfabric_prefix }}"]
+  become: true
+  changed_when: true
+  when: proxmox_openfabric_id not in (_proxmox_openfabric_config.stdout | from_json).fabrics | map(attribute='id')
+
+- name: Reconcile configured OpenFabric nodes
+  ansible.builtin.include_tasks: node.yml
+  loop: "{{ ansible_play_hosts_all }}"
+  loop_control:
+    loop_var: _proxmox_openfabric_node
+  when: not ansible_check_mode
+
+- name: Read pending fabric changes including interrupted previous runs
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/sdn/fabrics/all, --pending, '1', --output-format, json]
+  become: true
+  register: _proxmox_openfabric_pending
+  changed_when: false
+  check_mode: false
+
+- name: Apply pending SDN changes when requested
+  ansible.builtin.command:
+    argv: [pvesh, set, /cluster/sdn]
+  become: true
+  changed_when: true
+  when:
+  - proxmox_openfabric_apply | default(false)
+  - >-
+    (((_proxmox_openfabric_pending.stdout | from_json).fabrics +
+      (_proxmox_openfabric_pending.stdout | from_json).nodes) |
+      selectattr('state', 'defined') | list | length) > 0
