@@ -46,5 +46,9 @@
       label: "{{ _proxmox_auth_oidc.name }}"
     no_log: true
 
+  - name: Reconcile custom permission roles before assigning ACLs
+    ansible.builtin.import_tasks: roles.yml
+    when: proxmox_auth_roles | length > 0
+
   - name: Reconcile groups, users, and permissions
     ansible.builtin.import_tasks: access.yml

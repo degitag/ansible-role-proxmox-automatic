@@ -36,6 +36,20 @@ argument_specs:
           scopes:
             type: str
             description: Space-separated scopes in addition to openid.
+      proxmox_auth_roles:
+        type: list
+        elements: dict
+        description: Custom role IDs and their exact privilege lists.
+        options:
+          name:
+            type: str
+            required: true
+            description: Custom Proxmox role ID.
+          privileges:
+            type: list
+            elements: str
+            required: true
+            description: Exact list of privileges for the custom role.
       proxmox_auth_groups:
         type: list
         elements: str

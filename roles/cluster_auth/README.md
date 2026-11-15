@@ -16,3 +16,9 @@ Passwörter und MFA werden unabhängig davon eingerichtet. Mit
 `proxmox_auth_memberships` werden Gruppen zu den vorhandenen
 Mitgliedschaften ergänzt. `proxmox_auth_group_acls` vergibt vorhandene
 Proxmox-Rollen an Gruppen. Bestehende zusätzliche Zugriffe bleiben erhalten.
+
+Mit `proxmox_auth_roles` können eigene Proxmox-Rollen vor der ACL-Zuweisung
+angelegt und verwaltet werden. Je Rolle wird die vollständige Liste
+`privileges` angegeben. Änderungen an dieser Liste wirken sich auf alle
+vorhandenen ACLs mit derselben Rolle aus. Eingebaute Proxmox-Rollen sind
+geschützt.

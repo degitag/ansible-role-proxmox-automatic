@@ -9,6 +9,7 @@
 - Eigenständige OpenFabric-Rolle für IPv6-SDN und Erreichbarkeitsprüfung zwischen Knoten.
 - Thunderbolt-Rolle für persistente Schnittstellen und Ceph-Ethernet-Fallback.
 - Clusterweite Verwaltung von OpenID-Realms und Gruppenrechten.
+- Benutzerdefinierte Proxmox-Rollen mit deklarativer Privilegienliste und Schutz eingebauter Rollen.
 - Knoten-Zertifikatsrolle für PEM-Import, ACME und HTTPS-Prüfung.
 - Rolle zur Erzeugung geprüfter, hostbezogener Proxmox-VE-Installationsmedien.
 - Persistente Hostnetze für Proxmox mit Management, LACP, VLANs und unabhängigem Rollback.

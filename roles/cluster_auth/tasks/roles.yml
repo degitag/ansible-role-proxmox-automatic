@@ -1,0 +1,44 @@
+---
+- name: Read existing role definitions and built-in role IDs
+  ansible.builtin.command:
+    argv: [pvesh, get, /access/roles, --output-format, json]
+  register: _proxmox_auth_role_definitions
+  check_mode: false
+  changed_when: false
+
+- name: Validate unique custom role IDs and protect built-in roles
+  ansible.builtin.assert:
+    that:
+    - _declared_names | unique | length == _declared_names | length
+    - _declared_names | intersect(_builtin_names) | length == 0
+    - _declared_names | reject('match', '^[A-Za-z0-9][A-Za-z0-9._-]+$') | list | length == 0
+  vars:
+    _declared_names: "{{ proxmox_auth_roles | map(attribute='name') | list }}"
+    _builtin_names: >-
+      {{ (_proxmox_auth_role_definitions.stdout | from_json) |
+         selectattr('special', 'defined') | selectattr('special', 'equalto', 1) |
+         map(attribute='roleid') | list }}
+
+- name: Verify every declared role contains individual privilege names
+  ansible.builtin.assert:
+    that:
+    - item.privileges | length > 0
+    - item.privileges | reject('match', '^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)+$') | list | length == 0
+  loop: "{{ proxmox_auth_roles }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Apply the exact privileges for the declared custom roles
+  ansible.builtin.command:
+    argv: [pveum, role, "{{ 'modify' if _existing else 'add' }}", "{{ item.name }}",
+           --privs, "{{ item.privileges | unique | join(',') }}"]
+  loop: "{{ proxmox_auth_roles }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: true
+  vars:
+    _existing: >-
+      {{ (_proxmox_auth_role_definitions.stdout | from_json |
+          selectattr('roleid', 'equalto', item.name) | list | first) | default({}) }}
+    _current_privileges: "{{ _existing.privs | default('') | split(',') | reject('equalto', '') | list }}"
+  when: _current_privileges | sort != item.privileges | unique | sort
