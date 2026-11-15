@@ -1,7 +1,7 @@
 ---
 argument_specs:
   main:
-    short_description: Create or verify a Proxmox configuration backup
+    short_description: Create, verify or stage a Proxmox configuration backup for recovery
     options:
       proxmox_backup_cluster:
         type: str
@@ -17,6 +17,6 @@ argument_specs:
         description: Absolute archive path inside a root-only backup directory.
       proxmox_backup_action:
         type: str
-        choices: [create, verify]
+        choices: [create, verify, stage_restore]
         default: create
-        description: Create or verify the configuration archive.
+        description: Create or verify the archive, or stage verified files in a private sibling directory.

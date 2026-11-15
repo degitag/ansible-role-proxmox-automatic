@@ -13,6 +13,7 @@
 - Persistente Hostnetze für Proxmox mit Management, LACP, VLANs und unabhängigem Rollback.
 - Optionaler SSH-Vertrauensaufbau für Standalone-Kandidaten vor dem Clusterbeitritt.
 - Online-Sicherung und Integritätsprüfung der Proxmox-Clusterkonfiguration.
+- Geprüfte Bereitstellung der Clusterkonfiguration für die Wiederherstellung auf einem isolierten Host.
 - Rolle zum Ein- und Ausschalten des Proxmox-HA-Wartungsmodus je Knoten.
 - Serielle APT-Updates und Knoten-Neustarts mit HA-Wartung, Quorum- und Ceph-Prüfungen.
 

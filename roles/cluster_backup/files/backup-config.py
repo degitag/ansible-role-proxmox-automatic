@@ -46,14 +46,17 @@ def verify(archive, cluster, node, work):
         manifest = json.load(bundle.extractfile("manifest.json"))
         if manifest["cluster"] != cluster or manifest["node"] != node:
             raise ValueError("Archive belongs to a different cluster or node")
+        content = {}
         for name in names - {"manifest.json"}:
             data = bundle.extractfile(name).read()
             if digest(data) != manifest["sha256"][name]:
                 raise ValueError(f"Archive checksum failed for {name}")
+            content[name] = data
             if name == REQUIRED_FILES[0]:
                 db = work / "verified.db"
                 db.write_bytes(data)
                 integrity(db)
+        return content
 
 
 def create(archive, cluster, node, work):
@@ -80,6 +83,39 @@ def create(archive, cluster, node, work):
     os.link(prepared, archive)
 
 
+def stage_restore(destination, content, work):
+    prepared = work / "restore"
+    prepared.mkdir(mode=0o700)
+    for name, data in content.items():
+        target = prepared / name
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        target.write_bytes(data)
+    if destination.exists() or destination.is_symlink():
+        if not private_directory(destination):
+            raise ValueError("Recovery destination must be a root-owned private directory")
+        expected = {path.relative_to(prepared): path for path in prepared.rglob("*")}
+        actual = {path.relative_to(destination): path for path in destination.rglob("*")}
+        if actual.keys() != expected.keys():
+            raise ValueError("Existing recovery tree differs from the verified archive")
+        for name, target in actual.items():
+            info = target.lstat()
+            if info.st_uid != 0 or info.st_mode & 0o077:
+                raise ValueError(f"Insecure recovery tree entry: {name}")
+            if expected[name].is_dir():
+                if not stat.S_ISDIR(info.st_mode):
+                    raise ValueError(f"Unexpected recovery tree entry type: {name}")
+            elif not stat.S_ISREG(info.st_mode) or target.read_bytes() != content[str(name)]:
+                raise ValueError(f"Recovery tree entry differs from the archive: {name}")
+        return False
+    prepared.rename(destination)
+    return True
+
+
+def private_directory(path):
+    info = path.lstat()
+    return stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o077
+
+
 def main():
     action, name, cluster, node = sys.argv[1:]
     archive = Path(name)
@@ -88,8 +124,7 @@ def main():
     os.umask(0o077)
     if action == "create":
         archive.parent.mkdir(mode=0o700, exist_ok=True)
-    directory = archive.parent.stat()
-    if directory.st_uid != 0 or directory.st_mode & 0o077:
+    if not private_directory(archive.parent):
         raise ValueError("The backup directory must be root-owned and private")
     created = action == "create" and not archive.exists()
     with tempfile.TemporaryDirectory(prefix=".pve-config-", dir=archive.parent) as name:
@@ -97,9 +132,15 @@ def main():
         if created:
             create(archive, cluster, node, work)
         else:
-            verify(archive, cluster, node, work)
-    print(json.dumps({"archive": str(archive), "cluster": cluster, "node": node, "created": created,
-                      "sqlite_integrity": "ok"}))
+            content = verify(archive, cluster, node, work)
+            if action == "stage_restore":
+                destination = archive.with_name(archive.name + ".restore")
+                created = stage_restore(destination, content, work)
+    result = {"archive": str(archive), "cluster": cluster, "node": node, "created": created,
+              "sqlite_integrity": "ok"}
+    if action == "stage_restore":
+        result["recovery_tree"] = str(destination)
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":
