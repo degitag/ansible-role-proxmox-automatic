@@ -364,7 +364,7 @@ Konfigurationsdateien, lokale ISOs und Manifeste erhalten `0600`, Arbeitsverzeic
 | `degitag.proxmox.cluster_certificates` | PEM-Import und Proxmox-ACME-Zertifikate je Knoten verwalten |
 | `degitag.proxmox.cluster_backup` | Konsistente pmxcfs- und Hostkonfigurationsarchive erstellen und prüfen |
 | `degitag.proxmox.cluster_maintenance` | HA-Wartungsmodus je Knoten anfordern und wirksam prüfen |
-| `degitag.proxmox.cluster_reboot` | Knoten seriell mit HA-, Quorum- und Ceph-Prüfung neu starten |
+| `degitag.proxmox.cluster_reboot` | Knoten seriell mit HA-, Quorum- und Ceph-Prüfung aktualisieren oder neu starten |
 | `degitag.proxmox.cluster_resources` | Zentrale Sicherheitsgruppen, Aliase, IP-Sets und explizite Cluster-Regeln unabhängig von VMs verwalten |
 | `degitag.proxmox.host_network` | Management-Netz, LACP und VLANs mit Rollback verwalten |
 | `degitag.proxmox.host_install_media` | Unbeaufsichtigte Proxmox-VE-Installationsmedien für physische Hosts erstellen |

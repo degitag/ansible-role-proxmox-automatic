@@ -15,3 +15,12 @@ Wartungsmodus bleibt wirksam.
 
 Jeder reguläre Aufruf ist ein neuer Reboot-Auftrag. Der Check-Modus
 führt die lesenden Voraussetzungen aus, ohne den Knoten neu zu starten.
+
+Paketupdates verwenden denselben Wartungsablauf.
+`proxmox_reboot_upgrade_packages` aktualisiert die angegebenen installierten
+Pakete. `proxmox_reboot_full_upgrade: true` wählt alternativ ein
+`dist-upgrade` aus den konfigurierten APT-Quellen. APT simuliert den Eingriff
+vor dem Wartungsmodus. Die Simulation und die Installation verbieten
+Paketentfernungen. Wenn der gewählte Modus keine Paketänderung plant,
+überspringt die Rolle den Neustart. Im Check-Modus wird die vorhandene
+APT-Metadatenlage ausgewertet.

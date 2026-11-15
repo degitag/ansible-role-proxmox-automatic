@@ -13,7 +13,7 @@
 - Optionaler SSH-Vertrauensaufbau für Standalone-Kandidaten vor dem Clusterbeitritt.
 - Online-Sicherung und Integritätsprüfung der Proxmox-Clusterkonfiguration.
 - Rolle zum Ein- und Ausschalten des Proxmox-HA-Wartungsmodus je Knoten.
-- Serieller Knoten-Neustart mit HA-Wartung, Quorum- und Ceph-Prüfungen.
+- Serielle APT-Updates und Knoten-Neustarts mit HA-Wartung, Quorum- und Ceph-Prüfungen.
 
 ## [0.2.0] - 2026-10-27
 

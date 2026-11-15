@@ -16,3 +16,12 @@ argument_specs:
         type: bool
         default: false
         description: Verify internal Ceph can tolerate the stop and has recovered afterward.
+      proxmox_reboot_upgrade_packages:
+        type: list
+        elements: str
+        default: []
+        description: Installed APT packages to upgrade before reboot.
+      proxmox_reboot_full_upgrade:
+        type: bool
+        default: false
+        description: Apply APT dist-upgrade with removals forbidden before reboot.

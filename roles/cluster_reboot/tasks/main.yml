@@ -2,6 +2,12 @@
 - name: Reboot one Proxmox node with cluster health verification
   become: true
   any_errors_fatal: true
+  vars:
+    _proxmox_reboot_upgrade_requested: >-
+      {{ proxmox_reboot_full_upgrade | default(false) or proxmox_reboot_upgrade_packages | default([]) | length > 0 }}
+    _proxmox_reboot_upgrade_argv: >-
+      {{ ['dist-upgrade'] if proxmox_reboot_full_upgrade | default(false)
+         else ['--only-upgrade', 'install'] + (proxmox_reboot_upgrade_packages | default([])) }}
   block:
   - name: Require a complete node list and a serial play
     ansible.builtin.assert:
@@ -9,69 +15,18 @@
       - ansible_play_batch | length == 1
       - inventory_hostname in proxmox_reboot_nodes
 
-  - name: Verify all cluster members are online before maintenance
-    ansible.builtin.include_role:
-      name: degitag.proxmox.cluster
-    vars:
-      proxmox_cluster_name: "{{ proxmox_reboot_cluster }}"
-      proxmox_cluster_nodes: "{{ proxmox_reboot_nodes }}"
-
-  - name: Read votequorum and the local node vote count
-    ansible.builtin.command:
-      argv: [corosync-quorumtool, -s]
-    register: _proxmox_reboot_votes
-    check_mode: false
-    changed_when: false
-
-  - name: Verify the remaining votes would preserve quorum
+  - name: Require exactly one package upgrade mode
     ansible.builtin.assert:
       that:
-      - _total | length == 1
-      - _threshold | length == 1
-      - _local | length == 1
-      - (_total[0] | int) - (_local[0] | int) >= (_threshold[0] | int)
-    vars:
-      _total: "{{ _proxmox_reboot_votes.stdout | regex_findall('(?m)^Total votes:[ ]*([0-9]+)') }}"
-      _threshold: "{{ _proxmox_reboot_votes.stdout | regex_findall('(?m)^Quorum:[ ]*([0-9]+)') }}"
-      _local: "{{ _proxmox_reboot_votes.stdout | regex_findall('(?m)^[ ]*[0-9]+[ ]+([0-9]+)[ ]+.* [(]local[)]$') }}"
+      - not (proxmox_reboot_full_upgrade | default(false) and proxmox_reboot_upgrade_packages | default([]) | length > 0)
+      - >-
+        proxmox_reboot_upgrade_packages | default([]) |
+        reject('match', '^[a-z0-9][a-z0-9+.-]+(?::[a-z0-9-]+)?$') | list | length == 0
 
-  - name: Verify Ceph is healthy and can tolerate this node stopping
-    ansible.builtin.import_tasks: ceph_before.yml
-    when: proxmox_reboot_ceph | default(false)
+  - name: Simulate APT changes before entering maintenance
+    ansible.builtin.import_tasks: upgrade_plan.yml
+    when: _proxmox_reboot_upgrade_requested
 
-  - name: Put the node in confirmed HA maintenance
-    ansible.builtin.include_role:
-      name: degitag.proxmox.cluster_maintenance
-    vars:
-      proxmox_maintenance_cluster: "{{ proxmox_reboot_cluster }}"
-      proxmox_maintenance_node: "{{ inventory_hostname }}"
-      proxmox_maintenance_state: enabled
-
-  - name: Remember whether maintenance was already requested before the reboot
-    ansible.builtin.set_fact:
-      _proxmox_reboot_keep_maintenance: "{{ _request.maintenance | default(false) | bool }}"
-    vars:
-      _manager: "{{ (_proxmox_maintenance_before.stdout | from_json).manager_status }}"
-      _request: "{{ (_manager.node_request | default({})).get(inventory_hostname, {}) }}"
-
-  - name: Confirm no remaining local guest is running
-    ansible.builtin.command:
-      argv: [pvesh, get, /cluster/resources, --type, vm, --output-format, json]
-    register: _proxmox_reboot_guests
-    changed_when: false
-    check_mode: false
-    failed_when: >-
-      _proxmox_reboot_guests.rc != 0 or
-      (_proxmox_reboot_guests.stdout | from_json |
-       selectattr('node', 'equalto', inventory_hostname) |
-       rejectattr('status', 'equalto', 'stopped') | list | length) != 0
-
-  - name: Reboot the verified node and wait for SSH
-    ansible.builtin.reboot:
-      msg: Ansible Proxmox cluster maintenance
-      reboot_timeout: 600
-      post_reboot_delay: 10
-
-  - name: Verify recovered node state before leaving maintenance
-    ansible.builtin.import_tasks: recover.yml
-    when: not ansible_check_mode
+  - name: Run the maintenance and recovery cycle when requested
+    ansible.builtin.include_tasks: cycle.yml
+    when: not _proxmox_reboot_upgrade_requested or _proxmox_reboot_upgrades | length > 0
