@@ -11,6 +11,7 @@
 - Rolle zur Erzeugung geprüfter, hostbezogener Proxmox-VE-Installationsmedien.
 - Persistente Hostnetze für Proxmox mit Management, LACP, VLANs und unabhängigem Rollback.
 - Optionaler SSH-Vertrauensaufbau für Standalone-Kandidaten vor dem Clusterbeitritt.
+- Online-Sicherung und Integritätsprüfung der Proxmox-Clusterkonfiguration.
 
 ## [0.2.0] - 2026-10-27
 
