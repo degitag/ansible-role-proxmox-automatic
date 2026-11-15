@@ -2,153 +2,153 @@
 - name: Converge Proxmox cluster membership
   any_errors_fatal: true
   block:
-    - name: Validate bootstrap inventory and execution scope
-      ansible.builtin.assert:
-        that:
-          - proxmox_cluster_name is match('^[a-zA-Z][a-zA-Z0-9-]{0,14}$')
-          - proxmox_cluster_nodes | length >= 1
-          - proxmox_cluster_nodes | unique | length == proxmox_cluster_nodes | length
-          - proxmox_cluster_nodes | sort == ansible_play_hosts_all | sort
-          - ansible_play_hosts_all | sort == ansible_play_batch | sort
-          - proxmox_cluster_seed in proxmox_cluster_nodes
-          - proxmox_cluster_seed_address | length > 0
-          - proxmox_cluster_links | length in [1, 2]
-          - proxmox_cluster_links | reject('match', '^[0-9a-fA-F:.]+$') | list | length == 0
-        fail_msg: Bootstrap requires the complete cluster inventory in one linear play and explicit links on every node.
+  - name: Validate bootstrap inventory and execution scope
+    ansible.builtin.assert:
+      that:
+      - proxmox_cluster_name is match('^[a-zA-Z][a-zA-Z0-9-]{0,14}$')
+      - proxmox_cluster_nodes | length >= 1
+      - proxmox_cluster_nodes | unique | length == proxmox_cluster_nodes | length
+      - proxmox_cluster_nodes | sort == ansible_play_hosts_all | sort
+      - ansible_play_hosts_all | sort == ansible_play_batch | sort
+      - proxmox_cluster_seed in proxmox_cluster_nodes
+      - proxmox_cluster_seed_address | length > 0
+      - proxmox_cluster_links | length in [1, 2]
+      - proxmox_cluster_links | reject('match', '^[0-9a-fA-F:.]+$') | list | length == 0
+      fail_msg: Bootstrap requires the complete cluster inventory in one linear play and explicit links on every node.
 
-    - name: Read node identity before bootstrap
-      ansible.builtin.command:
-        argv: [hostname, -s]
-      register: _proxmox_bootstrap_hostname
-      changed_when: false
-      check_mode: false
+  - name: Read node identity before bootstrap
+    ansible.builtin.command:
+      argv: [hostname, -s]
+    register: _proxmox_bootstrap_hostname
+    changed_when: false
+    check_mode: false
 
-    - name: Read node addresses before bootstrap
-      ansible.builtin.command:
-        argv: [ip, -j, address, show, up]
-      register: _proxmox_bootstrap_addresses
-      changed_when: false
-      check_mode: false
+  - name: Read node addresses before bootstrap
+    ansible.builtin.command:
+      argv: [ip, -j, address, show, up]
+    register: _proxmox_bootstrap_addresses
+    changed_when: false
+    check_mode: false
 
-    - name: Verify local identity and Corosync link addresses
-      ansible.builtin.assert:
-        that:
-          - _proxmox_bootstrap_hostname.stdout == inventory_hostname
-          - proxmox_cluster_links | difference(_local_addresses) | length == 0
-        fail_msg: The actual node name or its active Corosync addresses differ from inventory.
-      vars:
-        _local_addresses: >-
-          {{ _proxmox_bootstrap_addresses.stdout | from_json | map(attribute='addr_info', default=[]) |
-             flatten | rejectattr('tentative', 'defined') | map(attribute='local') | list }}
+  - name: Verify local identity and Corosync link addresses
+    ansible.builtin.assert:
+      that:
+      - _proxmox_bootstrap_hostname.stdout == inventory_hostname
+      - proxmox_cluster_links | difference(_local_addresses) | length == 0
+      fail_msg: The actual node name or its active Corosync addresses differ from inventory.
+    vars:
+      _local_addresses: >-
+        {{ _proxmox_bootstrap_addresses.stdout | from_json | map(attribute='addr_info', default=[]) |
+           flatten | rejectattr('tentative', 'defined') | map(attribute='local') | list }}
 
-    - name: Read membership before bootstrap
-      ansible.builtin.include_tasks: read_status.yml
+  - name: Read membership before bootstrap
+    ansible.builtin.include_tasks: read_status.yml
 
-    - name: Reject foreign clusters and unhealthy existing membership
-      ansible.builtin.assert:
-        that:
-          - not _proxmox_cluster_summary or _proxmox_cluster_summary.name == proxmox_cluster_name
-          - not _proxmox_cluster_summary or (_proxmox_cluster_summary.quorate | bool)
-          - not _proxmox_cluster_summary or (_proxmox_cluster_members | map(attribute='name') | difference(proxmox_cluster_nodes) | length == 0)
-          - not _proxmox_cluster_summary or (_proxmox_cluster_members | rejectattr('online', 'equalto', 1) | list | length == 0)
-          - not _proxmox_cluster_summary or (proxmox_cluster_seed in (_proxmox_cluster_members | map(attribute='name') | list))
-        fail_msg: Existing Corosync state requires reconciliation or a clean installation before bootstrap.
+  - name: Reject foreign clusters and unhealthy existing membership
+    ansible.builtin.assert:
+      that:
+      - not _proxmox_cluster_summary or _proxmox_cluster_summary.name == proxmox_cluster_name
+      - not _proxmox_cluster_summary or (_proxmox_cluster_summary.quorate | bool)
+      - not _proxmox_cluster_summary or (_proxmox_cluster_members | map(attribute='name') | difference(proxmox_cluster_nodes) | length == 0)
+      - not _proxmox_cluster_summary or (_proxmox_cluster_members | rejectattr('online', 'equalto', 1) | list | length == 0)
+      - not _proxmox_cluster_summary or (proxmox_cluster_seed in (_proxmox_cluster_members | map(attribute='name') | list))
+      fail_msg: Existing Corosync state requires reconciliation or a clean installation before bootstrap.
 
-    - name: Verify every clustered node agrees with the seed
-      ansible.builtin.assert:
-        that:
-          - _proxmox_cluster_summary.version == hostvars[proxmox_cluster_seed]._proxmox_cluster_summary.version
-          - >-
-            _proxmox_cluster_members | map(attribute='name') | sort ==
-            hostvars[proxmox_cluster_seed]._proxmox_cluster_members | map(attribute='name') | sort
-      when: _proxmox_cluster_summary | length > 0
+  - name: Verify every clustered node agrees with the seed
+    ansible.builtin.assert:
+      that:
+      - _proxmox_cluster_summary.version == hostvars[proxmox_cluster_seed]._proxmox_cluster_summary.version
+      - >-
+        _proxmox_cluster_members | map(attribute='name') | sort ==
+        hostvars[proxmox_cluster_seed]._proxmox_cluster_members | map(attribute='name') | sort
+    when: _proxmox_cluster_summary | length > 0
 
-    - name: Verify noninteractive root SSH to the seed
-      ansible.builtin.command:
-        argv:
-          - ssh
-          - -o
-          - BatchMode=yes
-          - -o
-          - StrictHostKeyChecking=yes
-          - -o
-          - ConnectTimeout=5
-          - "root@{{ proxmox_cluster_seed_address }}"
-          - hostname
-          - -s
-      become: true
-      changed_when: false
-      check_mode: false
-      register: _proxmox_bootstrap_seed_identity
-      failed_when: >-
-        _proxmox_bootstrap_seed_identity.rc != 0 or
-        _proxmox_bootstrap_seed_identity.stdout != proxmox_cluster_seed
-      when:
-        - inventory_hostname != proxmox_cluster_seed
-        - not _proxmox_cluster_summary
+  - name: Verify noninteractive root SSH to the seed
+    ansible.builtin.command:
+      argv:
+      - ssh
+      - -o
+      - BatchMode=yes
+      - -o
+      - StrictHostKeyChecking=yes
+      - -o
+      - ConnectTimeout=5
+      - "root@{{ proxmox_cluster_seed_address }}"
+      - hostname
+      - -s
+    become: true
+    changed_when: false
+    check_mode: false
+    register: _proxmox_bootstrap_seed_identity
+    failed_when: >-
+      _proxmox_bootstrap_seed_identity.rc != 0 or
+      _proxmox_bootstrap_seed_identity.stdout != proxmox_cluster_seed
+    when:
+    - inventory_hostname != proxmox_cluster_seed
+    - not _proxmox_cluster_summary
 
-    - name: Check for existing guests on standalone candidates
-      ansible.builtin.command:
-        argv: [pvesh, get, /cluster/resources, --type, vm, --output-format, json]
-      become: true
-      register: _proxmox_bootstrap_guests
-      changed_when: false
-      check_mode: false
-      when: not _proxmox_cluster_summary
+  - name: Check for existing guests on standalone candidates
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/resources, --type, vm, --output-format, json]
+    become: true
+    register: _proxmox_bootstrap_guests
+    changed_when: false
+    check_mode: false
+    when: not _proxmox_cluster_summary
 
-    - name: Prevent joining a standalone node with existing guests
-      ansible.builtin.assert:
-        that: _proxmox_bootstrap_guests.stdout | from_json | length == 0
-      when:
-        - inventory_hostname != proxmox_cluster_seed
-        - not _proxmox_cluster_summary
+  - name: Prevent joining a standalone node with existing guests
+    ansible.builtin.assert:
+      that: _proxmox_bootstrap_guests.stdout | from_json | length == 0
+    when:
+    - inventory_hostname != proxmox_cluster_seed
+    - not _proxmox_cluster_summary
 
-    - name: Build native Corosync link arguments
-      ansible.builtin.set_fact:
-        _proxmox_bootstrap_link_args: >-
-          {{ ['--link0', 'address=' ~ proxmox_cluster_links[0] ~ ',priority=20']
-             + (['--link1', 'address=' ~ (proxmox_cluster_links[1] | default('')) ~ ',priority=10']
-                if proxmox_cluster_links | length == 2 else []) }}
+  - name: Build native Corosync link arguments
+    ansible.builtin.set_fact:
+      _proxmox_bootstrap_link_args: >-
+        {{ ['--link0', 'address=' ~ proxmox_cluster_links[0] ~ ',priority=20']
+           + (['--link1', 'address=' ~ (proxmox_cluster_links[1] | default('')) ~ ',priority=10']
+              if proxmox_cluster_links | length == 2 else []) }}
 
-    - name: Create cluster on the designated seed
-      ansible.builtin.command:
-        argv: "{{ ['pvecm', 'create', proxmox_cluster_name] + _proxmox_bootstrap_link_args }}"
-      become: true
-      changed_when: true
-      when:
-        - inventory_hostname == proxmox_cluster_seed
-        - not _proxmox_cluster_summary
-        - not ansible_check_mode
+  - name: Create cluster on the designated seed
+    ansible.builtin.command:
+      argv: "{{ ['pvecm', 'create', proxmox_cluster_name] + _proxmox_bootstrap_link_args }}"
+    become: true
+    changed_when: true
+    when:
+    - inventory_hostname == proxmox_cluster_seed
+    - not _proxmox_cluster_summary
+    - not ansible_check_mode
 
-    - name: Wait for seed quorum
-      ansible.builtin.command:
-        argv: [pvecm, status]
-      become: true
-      register: _proxmox_bootstrap_seed_status
-      changed_when: false
-      until:
-        - _proxmox_bootstrap_seed_status.rc == 0
-        - _proxmox_bootstrap_seed_status.stdout is search('(?m)^Quorate:\s+Yes$')
-      retries: 20
-      delay: 3
-      when:
-        - inventory_hostname == proxmox_cluster_seed
-        - not ansible_check_mode
+  - name: Wait for seed quorum
+    ansible.builtin.command:
+      argv: [pvecm, status]
+    become: true
+    register: _proxmox_bootstrap_seed_status
+    changed_when: false
+    until:
+    - _proxmox_bootstrap_seed_status.rc == 0
+    - _proxmox_bootstrap_seed_status.stdout is search('(?m)^Quorate:\s+Yes$')
+    retries: 20
+    delay: 3
+    when:
+    - inventory_hostname == proxmox_cluster_seed
+    - not ansible_check_mode
 
-    - name: Join standalone nodes one at a time
-      ansible.builtin.command:
-        argv: >-
-          {{ ['pvecm', 'add', proxmox_cluster_seed_address, '--use_ssh', '1']
-             + hostvars[item]._proxmox_bootstrap_link_args }}
-      become: true
-      delegate_to: "{{ item }}"
-      loop: "{{ proxmox_cluster_nodes | reject('equalto', proxmox_cluster_seed) | list }}"
-      changed_when: true
-      when:
-        - inventory_hostname == proxmox_cluster_seed
-        - not hostvars[item]._proxmox_cluster_summary
-        - not ansible_check_mode
+  - name: Join standalone nodes one at a time
+    ansible.builtin.command:
+      argv: >-
+        {{ ['pvecm', 'add', proxmox_cluster_seed_address, '--use_ssh', '1']
+           + hostvars[item]._proxmox_bootstrap_link_args }}
+    become: true
+    delegate_to: "{{ item }}"
+    loop: "{{ proxmox_cluster_nodes | reject('equalto', proxmox_cluster_seed) | list }}"
+    changed_when: true
+    when:
+    - inventory_hostname == proxmox_cluster_seed
+    - not hostvars[item]._proxmox_cluster_summary
+    - not ansible_check_mode
 
-    - name: Verify resulting cluster on every node
-      ansible.builtin.include_tasks: main.yml
-      when: not ansible_check_mode
+  - name: Verify resulting cluster on every node
+    ansible.builtin.include_tasks: main.yml
+    when: not ansible_check_mode

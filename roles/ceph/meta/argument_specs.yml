@@ -1,0 +1,35 @@
+---
+argument_specs:
+  main:
+    short_description: Install Ceph and reconcile monitors and managers on Proxmox VE
+    options:
+      proxmox_ceph_nodes:
+        type: list
+        elements: str
+        required: true
+        description: Inventory names of Ceph nodes in bootstrap order.
+      proxmox_ceph_cluster_name:
+        type: str
+        required: true
+        description: Expected Proxmox cluster name.
+      proxmox_ceph_public_network:
+        type: str
+        required: true
+        description: IPv6 CIDR used for client and monitor traffic.
+      proxmox_ceph_replication_network:
+        type: str
+        required: true
+        description: IPv6 CIDR used for OSD replication.
+      proxmox_ceph_public_address:
+        type: str
+        required: true
+        description: Local address for the Ceph monitor.
+      proxmox_ceph_replication_address:
+        type: str
+        required: true
+        description: Local address for OSD replication.
+      proxmox_ceph_repository:
+        type: str
+        choices: [enterprise, no-subscription, manual]
+        default: enterprise
+        description: Proxmox Ceph package repository.

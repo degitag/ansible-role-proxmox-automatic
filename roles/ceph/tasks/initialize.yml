@@ -1,0 +1,49 @@
+---
+- name: Check whether the shared Ceph configuration exists
+  ansible.builtin.stat:
+    path: /etc/pve/ceph.conf
+  register: _proxmox_ceph_config
+
+- name: Create a new Ceph configuration
+  ansible.builtin.command:
+    argv:
+    - pveceph
+    - init
+    - --network
+    - "{{ proxmox_ceph_public_network }}"
+    - --cluster-network
+    - "{{ proxmox_ceph_replication_network }}"
+    - --size
+    - '3'
+    - --min_size
+    - '2'
+  become: true
+  changed_when: true
+  when: not _proxmox_ceph_config.stat.exists
+
+- name: Read effective networks from existing Ceph configuration
+  ansible.builtin.command:
+    argv: [ceph-conf, -c, /etc/pve/ceph.conf, --show-config-value, "{{ item.key }}"]
+  loop:
+  - {key: public_network, network: "{{ proxmox_ceph_public_network }}"}
+  - {key: cluster_network, network: "{{ proxmox_ceph_replication_network }}"}
+  become: true
+  register: _proxmox_ceph_effective_network
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _proxmox_ceph_effective_network.rc != 0 or
+    _proxmox_ceph_effective_network.stdout | trim != item.network
+  when: _proxmox_ceph_config.stat.exists or not ansible_check_mode
+
+- name: Configure IPv6 messenger before starting services
+  ansible.builtin.lineinfile:
+    path: /etc/pve/ceph.conf
+    regexp: '^\s*{{ item.key }}\s*='
+    insertafter: '^\[global\]$'
+    line: "\t{{ item.key }} = {{ item.value }}"
+  loop:
+  - {key: ms_bind_ipv6, value: 'true'}
+  - {key: ms_bind_ipv4, value: 'false'}
+  become: true
+  when: _proxmox_ceph_config.stat.exists or not ansible_check_mode

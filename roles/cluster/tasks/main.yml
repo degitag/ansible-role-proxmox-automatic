@@ -2,8 +2,8 @@
 - name: Validate desired cluster topology
   ansible.builtin.assert:
     that:
-      - (_cluster_name | length > 0) == (_cluster_nodes | length > 0)
-      - _cluster_nodes | unique | length == _cluster_nodes | length
+    - (_cluster_name | length > 0) == (_cluster_nodes | length > 0)
+    - _cluster_nodes | unique | length == _cluster_nodes | length
     fail_msg: Set the expected cluster name and a nonempty list of unique node names together.
   vars:
     _cluster_name: "{{ proxmox_cluster_name | default('') }}"
@@ -23,10 +23,10 @@
 - name: Verify exact cluster membership and quorum
   ansible.builtin.assert:
     that:
-      - _proxmox_cluster_summary.name | default('') == proxmox_cluster_name
-      - _proxmox_cluster_summary.quorate | default(false) | bool
-      - _proxmox_cluster_members | map(attribute='name') | sort == proxmox_cluster_nodes | sort
-      - _proxmox_cluster_members | selectattr('online', 'equalto', 1) | list | length == proxmox_cluster_nodes | length
+    - _proxmox_cluster_summary.name | default('') == proxmox_cluster_name
+    - _proxmox_cluster_summary.quorate | default(false) | bool
+    - _proxmox_cluster_members | map(attribute='name') | sort == proxmox_cluster_nodes | sort
+    - _proxmox_cluster_members | selectattr('online', 'equalto', 1) | list | length == proxmox_cluster_nodes | length
     fail_msg: >-
       Local Proxmox cluster state does not match the required name, online membership or quorum.
       See the local status reported above.
