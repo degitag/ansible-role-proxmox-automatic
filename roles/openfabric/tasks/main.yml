@@ -90,17 +90,8 @@
     - proxmox_openfabric_apply | default(false)
     - not ansible_check_mode
 
-  - name: Verify traffic prefers the OpenFabric route
-    ansible.builtin.command:
-      argv: [ip, -j, -6, route, get, "{{ hostvars[item]._proxmox_openfabric_address }}"]
-    loop: "{{ ansible_play_hosts_all | reject('equalto', inventory_hostname) | list }}"
-    register: _proxmox_openfabric_route
-    changed_when: false
-    retries: 20
-    delay: 3
-    until:
-    - _proxmox_openfabric_route.rc == 0
-    - (_proxmox_openfabric_route.stdout | from_json | first).protocol | default('') == 'openfabric'
+  - name: Verify the routes between fabric nodes
+    ansible.builtin.import_tasks: routes.yml
     when:
     - proxmox_openfabric_apply | default(false)
     - not ansible_check_mode

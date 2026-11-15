@@ -8,6 +8,7 @@
 - Prüfung der RBD-Anwendung, des PG-Autoscalings und der CRUSH-Platzierung auf getrennten Hosts.
 - Optionale Chrony-Synchronisierung vor dem Ceph-Monitorstart.
 - Eigenständige OpenFabric-Rolle für IPv6-SDN und Erreichbarkeitsprüfung zwischen Knoten.
+- Abnahme direkter OpenFabric-Routen über die erwartete Thunderbolt-Schnittstelle.
 - Thunderbolt-Rolle für persistente Schnittstellen und Ceph-Ethernet-Fallback.
 - Clusterweite Verwaltung von OpenID-Realms und Gruppenrechten.
 - Benutzerdefinierte Proxmox-Rollen mit deklarativer Privilegienliste und Schutz eingebauter Rollen.

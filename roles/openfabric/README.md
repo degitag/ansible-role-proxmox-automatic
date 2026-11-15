@@ -12,3 +12,8 @@ dedizierten Cluster oder einen koordinierten SDN-Rollout. Anschließend prüft
 die Rolle die IPv6-Erreichbarkeit von jeder Fabric-Adresse zu allen Peers.
 Die Bereitstellung persistenter Thunderbolt-Interfaces und Ethernet-Fallbacks
 erfolgt vor beziehungsweise nach dem Fabric-Aufbau.
+
+Bei Punkt-zu-Punkt-Verbindungen kann jede Schnittstelle den optionalen
+`direct_peer` angeben. Die Rolle prüft dann, dass die Route zu dessen
+Fabric-Adresse direkt über diese Schnittstelle führt. Damit wird ein
+Umweg über einen dritten Fabric-Knoten bei der Abnahme sichtbar.

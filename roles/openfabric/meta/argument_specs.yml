@@ -32,6 +32,9 @@ argument_specs:
           ip6:
             type: str
             description: Optional interface IPv6 address in Proxmox format.
+          direct_peer:
+            type: str
+            description: Optional peer fabric IPv6 address expected directly on this interface.
       proxmox_openfabric_apply:
         type: bool
         default: false
