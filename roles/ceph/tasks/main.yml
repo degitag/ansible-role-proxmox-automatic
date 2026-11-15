@@ -1,0 +1,84 @@
+---
+- name: Install and configure Ceph services
+  any_errors_fatal: true
+  block:
+  - name: Verify Ceph nodes and networks before making changes
+    ansible.builtin.import_tasks: preflight.yml
+
+  - name: Configure the Chrony startup wait
+    ansible.builtin.import_tasks: chrony.yml
+    when: proxmox_ceph_wait_for_chrony | bool
+
+  - name: Check whether Ceph packages are installed
+    ansible.builtin.stat:
+      path: /usr/bin/ceph-mon
+    register: _proxmox_ceph_monitor_binary
+
+  - name: Install Ceph Tentacle
+    ansible.builtin.command:
+      argv: [pveceph, install, --version, tentacle, --repository, "{{ proxmox_ceph_repository }}"]
+    become: true
+    changed_when: true
+    when: not _proxmox_ceph_monitor_binary.stat.exists
+
+  - name: Initialize shared Ceph configuration on the first node
+    ansible.builtin.import_tasks: initialize.yml
+    when: inventory_hostname == proxmox_ceph_nodes[0]
+
+  - name: Link the local Ceph configuration to pmxcfs
+    ansible.builtin.file:
+      src: /etc/pve/ceph.conf
+      dest: /etc/ceph/ceph.conf
+      state: link
+    become: true
+    when: not ansible_check_mode
+
+  - name: Publish resolved monitor address for serial peer creation
+    ansible.builtin.set_fact:
+      _proxmox_ceph_public_address: "{{ proxmox_ceph_public_address }}"
+
+  - name: Reconcile monitor and manager services one node at a time
+    ansible.builtin.include_tasks: daemons.yml
+    loop: "{{ proxmox_ceph_nodes }}"
+    loop_control:
+      loop_var: _proxmox_ceph_daemon_node
+    when:
+    - inventory_hostname == proxmox_ceph_nodes[0]
+    - not ansible_check_mode
+
+  - name: Verify all Ceph monitors joined quorum and a manager is active
+    ansible.builtin.command:
+      argv: [timeout, '10', ceph, status, --format, json]
+    become: true
+    register: _proxmox_ceph_status
+    changed_when: false
+    retries: 15
+    delay: 4
+    until:
+    - _proxmox_ceph_status.rc == 0
+    - proxmox_ceph_nodes | difference((_proxmox_ceph_status.stdout | from_json).quorum_names) | length == 0
+    - (_proxmox_ceph_status.stdout | from_json).mgrmap.available | bool
+    when:
+    - inventory_hostname == proxmox_ceph_nodes[0]
+    - not ansible_check_mode
+
+  - name: Read the active Ceph FSID
+    ansible.builtin.command:
+      argv: [timeout, '10', ceph, fsid]
+    become: true
+    register: _proxmox_ceph_fsid
+    changed_when: false
+    when: not ansible_check_mode
+
+  - name: Reconcile local Ceph OSDs
+    ansible.builtin.import_tasks: osd.yml
+    when:
+    - proxmox_ceph_osd_devices | length > 0
+    - not ansible_check_mode
+
+  - name: Reconcile shared RBD storage
+    ansible.builtin.import_tasks: rbd.yml
+    when:
+    - inventory_hostname == proxmox_ceph_nodes[0]
+    - proxmox_ceph_rbd_pool | length > 0
+    - not ansible_check_mode

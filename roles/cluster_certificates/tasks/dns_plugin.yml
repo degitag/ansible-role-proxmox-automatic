@@ -1,0 +1,37 @@
+---
+- name: Create the cluster DNS challenge plugin with protected inputs
+  no_log: true
+  block:
+  - name: Require credentials and a DNS driver when creating a plugin
+    ansible.builtin.assert:
+      that:
+      - proxmox_cert_dns_api | default('') | length > 0
+      - proxmox_cert_dns_data | default('') | length > 0
+
+  - name: Create a temporary local-to-node DNS credentials file
+    ansible.builtin.tempfile:
+      state: file
+      prefix: pve-acme-
+    register: _proxmox_cert_dns_file
+    changed_when: false
+
+  - name: Stage DNS credentials
+    ansible.builtin.copy:
+      content: "{{ proxmox_cert_dns_data }}"
+      dest: "{{ _proxmox_cert_dns_file.path }}"
+      mode: '0600'
+    changed_when: false
+
+  - name: Register the cluster DNS challenge plugin
+    ansible.builtin.command:
+      argv: [pvenode, acme, plugin, add, dns, "{{ proxmox_cert_plugin }}",
+             --api, "{{ proxmox_cert_dns_api }}", --data, "{{ _proxmox_cert_dns_file.path }}"]
+    changed_when: true
+
+  always:
+  - name: Remove the staged DNS credentials
+    ansible.builtin.file:
+      path: "{{ _proxmox_cert_dns_file.path }}"
+      state: absent
+    changed_when: false
+    when: _proxmox_cert_dns_file.path is defined

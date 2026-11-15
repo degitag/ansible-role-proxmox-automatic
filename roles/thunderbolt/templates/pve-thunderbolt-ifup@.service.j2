@@ -1,0 +1,13 @@
+[Unit]
+Description=Configure Proxmox Thunderbolt interface %I when it appears
+BindsTo=sys-subsystem-net-devices-%i.device
+After=sys-subsystem-net-devices-%i.device networking.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ifup --force %I
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=90s

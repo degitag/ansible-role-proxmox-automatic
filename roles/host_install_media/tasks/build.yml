@@ -1,0 +1,59 @@
+---
+- name: Build the unattended install image with protected staging
+  block:
+  - name: Allocate a private staging directory on the artifact filesystem
+    ansible.builtin.tempfile:
+      state: directory
+      path: "{{ proxmox_host_installer_output }}"
+      prefix: pve-installer-
+    register: _proxmox_host_installer_stage
+    changed_when: false
+
+  - name: Render the protected Proxmox installation answer
+    ansible.builtin.template:
+      src: answer.toml.j2
+      dest: "{{ _proxmox_host_installer_stage.path }}/answer.toml"
+      mode: '0600'
+    no_log: true
+    changed_when: false
+
+  - name: Validate the answer against the native Proxmox schema
+    ansible.builtin.command:
+      argv: ["{{ proxmox_host_installer_assistant }}", validate-answer, "{{ _proxmox_host_installer_stage.path }}/answer.toml"]
+    no_log: true
+    changed_when: false
+
+  - name: Produce a bootable Proxmox ISO with the embedded answer
+    ansible.builtin.command:
+      argv:
+      - "{{ proxmox_host_installer_assistant }}"
+      - prepare-iso
+      - --fetch-from
+      - iso
+      - --answer-file
+      - "{{ _proxmox_host_installer_stage.path }}/answer.toml"
+      - --tmp
+      - "{{ _proxmox_host_installer_stage.path }}"
+      - --output
+      - "{{ _proxmox_host_installer_stage.path }}/result.iso"
+      - "{{ proxmox_host_installer_source }}"
+    changed_when: true
+
+  - name: Protect the generated ISO against unauthorized reads
+    ansible.builtin.file:
+      path: "{{ _proxmox_host_installer_stage.path }}/result.iso"
+      mode: '0600'
+    changed_when: false
+
+  - name: Publish the complete ISO atomically
+    ansible.builtin.command:
+      argv: [mv, -T, "{{ _proxmox_host_installer_stage.path }}/result.iso", "{{ proxmox_host_installer_image }}"]
+    changed_when: true
+
+  always:
+  - name: Remove temporary answers and incomplete images
+    ansible.builtin.file:
+      path: "{{ _proxmox_host_installer_stage.path }}"
+      state: absent
+    changed_when: false
+    when: _proxmox_host_installer_stage.path is defined

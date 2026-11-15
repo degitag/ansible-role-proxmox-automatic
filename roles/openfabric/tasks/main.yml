@@ -1,0 +1,97 @@
+---
+- name: Configure the cluster OpenFabric
+  any_errors_fatal: true
+  block:
+  - name: Verify the Proxmox cluster before configuring SDN
+    ansible.builtin.include_role:
+      name: degitag.proxmox.cluster
+    vars:
+      proxmox_cluster_name: "{{ proxmox_openfabric_cluster }}"
+      proxmox_cluster_nodes: "{{ ansible_play_hosts_all }}"
+
+  - name: Validate OpenFabric topology
+    ansible.builtin.assert:
+      that:
+      - ansible_play_batch | sort == ansible_play_hosts_all | sort
+      - proxmox_openfabric_id is match('^[A-Za-z0-9][A-Za-z0-9-]{0,6}[A-Za-z0-9]?$')
+      - proxmox_openfabric_interfaces | length >= 1
+      - proxmox_openfabric_interfaces | map(attribute='name') | unique | length == proxmox_openfabric_interfaces | length
+      - proxmox_openfabric_interfaces | map(attribute='name') | reject('match', '^[a-zA-Z0-9_.-]+$') | list | length == 0
+
+  - name: Check local forwarding and fabric interfaces
+    ansible.builtin.command:
+      argv: "{{ ['/usr/bin/python3', '-c', _proxmox_openfabric_check, proxmox_openfabric_prefix,
+                 proxmox_openfabric_address] + (proxmox_openfabric_interfaces | map(attribute='name') | list) }}"
+    vars:
+      _proxmox_openfabric_check: |
+        from ipaddress import IPv6Address, IPv6Network
+        from pathlib import Path
+        import sys
+
+        prefix, address, *interfaces = sys.argv[1:]
+        if IPv6Address(address) not in IPv6Network(prefix):
+            sys.exit("Fabric node address is outside the fabric prefix")
+        for interface in interfaces:
+            link = Path("/sys/class/net") / interface
+            if not link.is_dir() or int((link / "mtu").read_text()) < 1500:
+                sys.exit(f"Missing interface or invalid MTU: {interface}")
+    check_mode: false
+    changed_when: false
+
+  - name: Publish resolved fabric inputs for peer operations
+    ansible.builtin.set_fact:
+      _proxmox_openfabric_address: "{{ proxmox_openfabric_address }}"
+      _proxmox_openfabric_interfaces: "{{ proxmox_openfabric_interfaces }}"
+
+  - name: Confirm all node addresses and local identity
+    ansible.builtin.assert:
+      that:
+      - ansible_play_hosts_all | map('extract', hostvars, '_proxmox_openfabric_address') | unique | length == ansible_play_hosts_all | length
+      - _proxmox_cluster_members | selectattr('local', 'equalto', 1) | map(attribute='name') | list == [inventory_hostname]
+
+  - name: Install the OpenFabric routing daemon
+    ansible.builtin.apt:
+      name: frr
+      state: present
+    become: true
+
+  - name: Persist and activate IPv6 forwarding
+    ansible.posix.sysctl:
+      name: net.ipv6.conf.all.forwarding
+      value: '1'
+      sysctl_file: /etc/sysctl.d/90-proxmox-openfabric.conf
+      sysctl_set: true
+    become: true
+
+  - name: Manage shared SDN entries on the first node
+    ansible.builtin.import_tasks: fabric.yml
+    when: inventory_hostname == ansible_play_hosts_all[0]
+
+  - name: Verify IPv6 traffic between every pair of fabric nodes
+    ansible.builtin.command:
+      argv:
+      - ping
+      - '-6'
+      - '-n'
+      - '-I'
+      - "{{ proxmox_openfabric_address }}"
+      - '-c'
+      - '1'
+      - '-W'
+      - '2'
+      - "{{ hostvars[item]._proxmox_openfabric_address }}"
+    loop: "{{ ansible_play_hosts_all | reject('equalto', inventory_hostname) | list }}"
+    register: _proxmox_openfabric_ping
+    changed_when: false
+    retries: 20
+    delay: 3
+    until: _proxmox_openfabric_ping.rc == 0
+    when:
+    - proxmox_openfabric_apply | default(false)
+    - not ansible_check_mode
+
+  - name: Verify the routes between fabric nodes
+    ansible.builtin.import_tasks: routes.yml
+    when:
+    - proxmox_openfabric_apply | default(false)
+    - not ansible_check_mode

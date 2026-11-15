@@ -1,0 +1,54 @@
+---
+- name: Manage shared authentication configuration
+  become: true
+  any_errors_fatal: true
+  block:
+  - name: Read cluster membership of the designated administration node
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/status, --output-format, json]
+    register: _proxmox_auth_status
+    check_mode: false
+    changed_when: false
+
+  - name: Require one administration node in the intended quorate cluster
+    ansible.builtin.assert:
+      that:
+      - ansible_play_hosts_all | length == 1
+      - _summary.name | default('') == proxmox_auth_cluster
+      - _summary.quorate | default(false) | bool
+    vars:
+      _summary: >-
+        {{ (_proxmox_auth_status.stdout | from_json | selectattr('type', 'equalto', 'cluster') |
+            list | first) | default({}) }}
+
+  - name: Verify valid and unique OIDC realm IDs
+    ansible.builtin.assert:
+      that:
+      - proxmox_auth_oidc_realms | map(attribute='name') | unique | length == proxmox_auth_oidc_realms | length
+      - proxmox_auth_oidc_realms | map(attribute='name') | reject('match', '^[A-Za-z0-9][A-Za-z0-9._-]+$') | list | length == 0
+      - proxmox_auth_oidc_realms | map(attribute='name') | intersect(['pam', 'pve']) | length == 0
+      - proxmox_auth_oidc_realms | map(attribute='issuer') | reject('match', '^https://[^/]+') | list | length == 0
+    no_log: true
+
+  - name: Read configured authentication realms
+    ansible.builtin.command:
+      argv: [pvesh, get, /access/domains, --output-format, json]
+    register: _proxmox_auth_domains
+    check_mode: false
+    changed_when: false
+    no_log: true
+
+  - name: Reconcile each OpenID realm
+    ansible.builtin.include_tasks: oidc.yml
+    loop: "{{ proxmox_auth_oidc_realms }}"
+    loop_control:
+      loop_var: _proxmox_auth_oidc
+      label: "{{ _proxmox_auth_oidc.name }}"
+    no_log: true
+
+  - name: Reconcile custom permission roles before assigning ACLs
+    ansible.builtin.import_tasks: roles.yml
+    when: proxmox_auth_roles | length > 0
+
+  - name: Reconcile groups, users, and permissions
+    ansible.builtin.import_tasks: access.yml

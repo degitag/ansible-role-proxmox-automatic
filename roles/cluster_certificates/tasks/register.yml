@@ -1,0 +1,36 @@
+---
+- name: Verify inputs for registration with the intended ACME CA
+  ansible.builtin.assert:
+    that:
+    - proxmox_cert_contact | default('') | length > 0
+    - proxmox_cert_tos_url | default('') | length > 0
+
+- name: Read current CA registration metadata
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/acme/meta, --directory, "{{ proxmox_cert_directory }}", --output-format, json]
+  check_mode: false
+  changed_when: false
+  register: _proxmox_cert_ca_metadata
+
+- name: Verify the accepted CA terms still match the CA directory
+  ansible.builtin.assert:
+    that: (_proxmox_cert_ca_metadata.stdout | from_json).termsOfService == proxmox_cert_tos_url
+
+- name: Register the configured ACME account
+  ansible.builtin.command:
+    argv: [pvesh, create, /cluster/acme/account, --name, "{{ proxmox_cert_account }}",
+           --contact, "{{ proxmox_cert_contact }}", --directory, "{{ proxmox_cert_directory }}",
+           --tos_url, "{{ proxmox_cert_tos_url }}"]
+  changed_when: true
+
+- name: Wait until the ACME account is available
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/acme/account, --output-format, json]
+  register: _proxmox_cert_registration
+  retries: 20
+  delay: 3
+  until:
+  - _proxmox_cert_registration.rc == 0
+  - proxmox_cert_account in (_proxmox_cert_registration.stdout | from_json | map(attribute='name'))
+  changed_when: false
+  when: not ansible_check_mode

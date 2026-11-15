@@ -1,0 +1,32 @@
+---
+- name: Reboot one Proxmox node with cluster health verification
+  become: true
+  any_errors_fatal: true
+  vars:
+    _proxmox_reboot_upgrade_requested: >-
+      {{ proxmox_reboot_full_upgrade | default(false) or proxmox_reboot_upgrade_packages | default([]) | length > 0 }}
+    _proxmox_reboot_upgrade_argv: >-
+      {{ ['dist-upgrade'] if proxmox_reboot_full_upgrade | default(false)
+         else ['--only-upgrade', 'install'] + (proxmox_reboot_upgrade_packages | default([])) }}
+  block:
+  - name: Require a complete node list and a serial play
+    ansible.builtin.assert:
+      that:
+      - ansible_play_batch | length == 1
+      - inventory_hostname in proxmox_reboot_nodes
+
+  - name: Require exactly one package upgrade mode
+    ansible.builtin.assert:
+      that:
+      - not (proxmox_reboot_full_upgrade | default(false) and proxmox_reboot_upgrade_packages | default([]) | length > 0)
+      - >-
+        proxmox_reboot_upgrade_packages | default([]) |
+        reject('match', '^[a-z0-9][a-z0-9+.-]+(?::[a-z0-9-]+)?$') | list | length == 0
+
+  - name: Simulate APT changes before entering maintenance
+    ansible.builtin.import_tasks: upgrade_plan.yml
+    when: _proxmox_reboot_upgrade_requested
+
+  - name: Run the maintenance and recovery cycle when requested
+    ansible.builtin.include_tasks: cycle.yml
+    when: not _proxmox_reboot_upgrade_requested or _proxmox_reboot_upgrades | length > 0

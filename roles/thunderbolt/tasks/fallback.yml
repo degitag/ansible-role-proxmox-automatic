@@ -1,0 +1,142 @@
+---
+- name: Persist Ceph Ethernet fallback paths
+  become: true
+  block:
+  - name: Validate local Thunderbolt identities
+    ansible.builtin.import_tasks: validate.yml
+
+  - name: Validate all IPv6 fallback inputs before installation
+    ansible.builtin.command:
+      argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import ipaddress
+        import json
+        import subprocess
+        import sys
+
+        source, fallback, links = sys.argv[1:]
+        peers = set()
+        source_ip = ipaddress.IPv6Address(source)
+        local = json.loads(subprocess.check_output(["ip", "-j", "-6", "addr", "show"], text=True))
+        if not any(
+            ipaddress.IPv6Address(address["local"]) == source_ip
+            for interface in local for address in interface.get("addr_info", [])
+        ):
+            sys.exit(f"OpenFabric source address is not configured locally: {source}")
+        subprocess.check_call(["ip", "link", "show", "dev", fallback], stdout=subprocess.DEVNULL)
+        for link in json.loads(links):
+            ipaddress.IPv6Interface(link["address"])
+            peer = ipaddress.IPv6Address(link["peer_ceph_sync_ipv6"])
+            ipaddress.IPv6Address(link["gateway"])
+            if peer in peers or peer == ipaddress.IPv6Address(source):
+                sys.exit(f"Duplicate or local replication peer: {peer}")
+            peers.add(peer)
+      - "{{ proxmox_thunderbolt_source }}"
+      - "{{ proxmox_thunderbolt_fallback_interface }}"
+      - "{{ proxmox_thunderbolt_links | to_json }}"
+    changed_when: false
+    check_mode: false
+
+  - name: Install fabric reconciliation helper
+    ansible.builtin.copy:
+      src: pve-thunderbolt-reconcile.py
+      dest: /usr/local/sbin/pve-thunderbolt-reconcile
+      mode: '0755'
+      owner: root
+      group: root
+
+  - name: Configure host-specific Thunderbolt and Ethernet fallback paths
+    ansible.builtin.copy:
+      dest: /etc/pve-thunderbolt.json
+      mode: '0644'
+      owner: root
+      group: root
+      content: |
+        {
+          "source": {{ proxmox_thunderbolt_source | to_json }},
+          "fallback_interface": {{ proxmox_thunderbolt_fallback_interface | to_json }},
+          "mtu": {{ proxmox_thunderbolt_mtu }},
+          "links": [
+        {% for link in proxmox_thunderbolt_links %}
+            {{ (link | combine({'pci': link.path | regex_replace('^pci-', ''), 'gateway': link.gateway})) | to_json }}{{ ',' if not loop.last else '' }}
+        {% endfor %}
+          ]
+        }
+
+  - name: Keep only the Ceph Thunderbolt controllers awake
+    ansible.builtin.copy:
+      dest: /etc/udev/rules.d/80-pve-thunderbolt-power.rules
+      mode: '0644'
+      owner: root
+      group: root
+      content: |
+        # Dedicated inter-host Ceph links must remain discoverable after peer reboot.
+        {% for link in proxmox_thunderbolt_links %}
+        ACTION=="add|bind", SUBSYSTEM=="pci", KERNEL=="{{ link.path | regex_replace('^pci-', '') }}", ATTR{vendor}=="0x8086", TEST=="power/control", ATTR{power/control}="on"
+        ACTION=="add|bind", SUBSYSTEM=="thunderbolt", KERNEL=="*-0", KERNELS=="{{ link.path | regex_replace('^pci-', '') }}", TEST=="power/control", ATTR{power/control}="on"
+        {% endfor %}
+    notify:
+    - Reload Thunderbolt udev rules
+    - Refresh Thunderbolt initramfs configuration
+
+  - name: Install fabric reconciliation service
+    ansible.builtin.copy:
+      dest: /etc/systemd/system/pve-thunderbolt-reconcile.service
+      mode: '0644'
+      owner: root
+      group: root
+      content: |
+        [Unit]
+        Description=Reconcile Thunderbolt interfaces and Ceph Ethernet fallback
+        After=networking.service systemd-modules-load.service
+        Before=pve-guests.service ceph-osd.target
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/pve-thunderbolt-reconcile
+        TimeoutStartSec=120
+        [Install]
+        WantedBy=multi-user.target
+    notify: Reload Thunderbolt systemd units
+
+  - name: Recheck after hotplug and network reload without resetting controllers
+    ansible.builtin.copy:
+      dest: /etc/systemd/system/pve-thunderbolt-reconcile.timer
+      mode: '0644'
+      owner: root
+      group: root
+      content: |
+        [Unit]
+        Description=Check Ceph fallback and Thunderbolt configuration every 30 seconds
+        [Timer]
+        OnBootSec=30s
+        OnUnitInactiveSec=30s
+        AccuracySec=1s
+        [Install]
+        WantedBy=timers.target
+    notify: Reload Thunderbolt systemd units
+
+  - name: Apply changes before enabling Ceph fallback services
+    ansible.builtin.meta: flush_handlers
+
+  - name: Enable reconciliation at boot
+    ansible.builtin.systemd_service:
+      name: pve-thunderbolt-reconcile.service
+      enabled: true
+
+  - name: Reconcile fabric configuration now
+    ansible.builtin.command: /usr/local/sbin/pve-thunderbolt-reconcile
+    register: thunderbolt_reconciled
+    when: not ansible_check_mode
+    changed_when: "'changed' in thunderbolt_reconciled.stdout"
+
+  - name: Enable periodic fabric checks
+    ansible.builtin.systemd_service:
+      name: pve-thunderbolt-reconcile.timer
+      enabled: true
+      state: started
+
+  - name: Verify effective fabric configuration without changing it
+    ansible.builtin.command: /usr/local/sbin/pve-thunderbolt-reconcile --check
+    changed_when: false

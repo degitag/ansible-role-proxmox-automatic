@@ -1,0 +1,84 @@
+---
+argument_specs:
+  main:
+    short_description: Build unattended Proxmox VE bare-metal installation media
+    options:
+      proxmox_host_installer_assistant:
+        type: path
+        description: Path to the Proxmox Automated Installation Assistant on the Linux build host.
+      proxmox_host_installer_source:
+        type: path
+        required: true
+        description: Source Proxmox VE ISO path on the build host.
+      proxmox_host_installer_sha256:
+        type: str
+        required: true
+        description: Expected official source ISO SHA-256.
+      proxmox_host_installer_output:
+        type: path
+        required: true
+        description: Private media output directory on the build host.
+      proxmox_host_installer_fqdn:
+        type: str
+        required: true
+        description: Target host fully qualified domain name.
+      proxmox_host_installer_contact:
+        type: str
+        required: true
+        description: Installer contact email.
+      proxmox_host_installer_country:
+        type: str
+        description: Installer country.
+      proxmox_host_installer_keyboard:
+        type: str
+        description: Installer keyboard layout.
+      proxmox_host_installer_timezone:
+        type: str
+        description: Installer timezone.
+      proxmox_host_installer_root_hash:
+        type: str
+        required: true
+        description: Vault-supplied root password hash.
+      proxmox_host_installer_ssh_keys:
+        type: list
+        elements: str
+        required: true
+        description: Expected root SSH public keys.
+      proxmox_host_installer_management_mac:
+        type: str
+        required: true
+        description: Permanent hardware MAC of the management network interface.
+      proxmox_host_installer_cidr:
+        type: str
+        required: true
+        description: Initial static management address and prefix.
+      proxmox_host_installer_gateway:
+        type: str
+        required: true
+        description: Initial management default gateway.
+      proxmox_host_installer_dns:
+        type: str
+        required: true
+        description: Initial management DNS resolver.
+      proxmox_host_installer_disk_serial:
+        type: str
+        required: true
+        description: Exact ID_SERIAL_SHORT of the one system disk.
+      proxmox_host_installer_filesystem:
+        type: str
+        choices: [ext4, xfs]
+        description: Local system disk filesystem.
+  verify_hardware:
+    short_description: Verify exact installer filters on the target host
+    options:
+      proxmox_host_installer_assistant:
+        type: path
+        description: Path to the Proxmox Automated Installation Assistant on the target host.
+      proxmox_host_installer_management_mac:
+        type: str
+        required: true
+        description: Permanent hardware MAC of the management network interface.
+      proxmox_host_installer_disk_serial:
+        type: str
+        required: true
+        description: Exact ID_SERIAL_SHORT of the intended system disk.

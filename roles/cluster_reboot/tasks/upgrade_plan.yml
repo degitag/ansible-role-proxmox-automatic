@@ -1,0 +1,26 @@
+---
+- name: Refresh APT metadata for the configured repositories
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: not ansible_check_mode
+
+- name: Simulate the intended APT upgrade without allowing removals
+  ansible.builtin.command:
+    argv: "{{ ['apt-get', '--simulate', '--no-remove'] + _proxmox_reboot_upgrade_argv }}"
+  environment:
+    LC_ALL: C
+  register: _proxmox_reboot_apt
+  check_mode: false
+  changed_when: false
+  failed_when: >-
+    _proxmox_reboot_apt.rc != 0 or
+    (_proxmox_reboot_apt.stdout is search('(?m)^(Remv|Purg) '))
+
+- name: Record the packages APT would install or upgrade
+  ansible.builtin.set_fact:
+    _proxmox_reboot_upgrades: "{{ _proxmox_reboot_apt.stdout_lines | select('match', '^Inst ') | list }}"
+
+- name: Report the verified APT plan
+  ansible.builtin.debug:
+    var: _proxmox_reboot_upgrades

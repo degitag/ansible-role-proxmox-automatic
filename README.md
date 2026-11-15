@@ -356,7 +356,18 @@ Konfigurationsdateien, lokale ISOs und Manifeste erhalten `0600`, Arbeitsverzeic
 | Rolle | Aufgabe |
 |---|---|
 | `degitag.proxmox.deploy` | Vorprüfung, Installation, Verifikation und Abschluss koordinieren |
+| `degitag.proxmox.cluster` | Mitgliedschaft, Online-Status und Quorum pro Knoten prüfen |
+| `degitag.proxmox.thunderbolt` | Stabile Thunderbolt-Schnittstellen, Hotplug und Ethernet-Fallback für Ceph |
+| `degitag.proxmox.openfabric` | IPv6-OpenFabric und Knoten über Proxmox SDN konfigurieren |
+| `degitag.proxmox.ceph` | Ceph Tentacle installieren und Monitor-/Manager-Dienste einrichten |
+| `degitag.proxmox.cluster_auth` | OIDC-Realms, Benutzer, Gruppen und ACLs verwalten |
+| `degitag.proxmox.cluster_certificates` | PEM-Import und Proxmox-ACME-Zertifikate je Knoten verwalten |
+| `degitag.proxmox.cluster_backup` | Konsistente pmxcfs- und Hostkonfigurationsarchive erstellen und prüfen |
+| `degitag.proxmox.cluster_maintenance` | HA-Wartungsmodus je Knoten anfordern und wirksam prüfen |
+| `degitag.proxmox.cluster_reboot` | Knoten seriell mit HA-, Quorum- und Ceph-Prüfung aktualisieren oder neu starten |
 | `degitag.proxmox.cluster_resources` | Zentrale Sicherheitsgruppen, Aliase, IP-Sets und explizite Cluster-Regeln unabhängig von VMs verwalten |
+| `degitag.proxmox.host_network` | Management-Netz, LACP und VLANs mit Rollback verwalten |
+| `degitag.proxmox.host_install_media` | Unbeaufsichtigte Proxmox-VE-Installationsmedien für physische Hosts erstellen |
 | `degitag.proxmox.install_media` | Kickstart-Konfigurations-CD beziehungsweise remastertes Debian-ISO erzeugen und hochladen |
 | `degitag.proxmox.vm` | VM-Hardware erstellen, Installer starten und Bootreihenfolge steuern |
 | `degitag.proxmox.guest` | Installation prüfen, Bootstrap-Benutzer/Pakete/Sysctl verwalten und optional eine Gast-Firewall einrichten |

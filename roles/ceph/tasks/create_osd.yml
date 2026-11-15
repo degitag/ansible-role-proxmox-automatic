@@ -1,0 +1,7 @@
+---
+- name: Create one explicitly selected empty OSD
+  ansible.builtin.command:
+    argv: [pveceph, osd, create, "{{ _proxmox_ceph_osd_device }}"]
+  become: true
+  changed_when: true
+  throttle: 1

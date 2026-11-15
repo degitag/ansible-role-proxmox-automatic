@@ -1,0 +1,29 @@
+---
+- name: Join the intended node over root SSH
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pvecm', 'add', proxmox_cluster_seed_address, '--use_ssh', '1']
+         + hostvars[_proxmox_join_node]._proxmox_bootstrap_link_args }}
+  become: true
+  delegate_to: "{{ _proxmox_join_node }}"
+  register: _proxmox_join_result
+  changed_when: _proxmox_join_success in _proxmox_join_result.stdout
+  failed_when: _proxmox_join_result.rc != 0 or _proxmox_join_success not in _proxmox_join_result.stdout
+  vars:
+    _proxmox_join_success: "successfully added node '{{ _proxmox_join_node }}' to cluster."
+
+- name: Wait for the joined node and quorum on the seed
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/status, --output-format, json]
+  become: true
+  register: _proxmox_join_status
+  changed_when: false
+  retries: 30
+  delay: 3
+  until:
+  - _proxmox_join_status.rc == 0
+  - _join_status | selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
+  - _join_status | selectattr('type', 'equalto', 'node') | selectattr('name', 'equalto', _proxmox_join_node) |
+    selectattr('online', 'equalto', 1) | list | length == 1
+  vars:
+    _join_status: "{{ _proxmox_join_status.stdout | from_json }}"

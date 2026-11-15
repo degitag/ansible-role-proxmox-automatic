@@ -1,0 +1,67 @@
+---
+- name: Require controller SSH host verification before transferring trust
+  ansible.builtin.assert:
+    that:
+    - ansible_host_key_checking | default(lookup('ansible.builtin.config', 'HOST_KEY_CHECKING')) | bool
+    - >-
+      hostvars[proxmox_cluster_seed].ansible_host_key_checking |
+      default(lookup('ansible.builtin.config', 'HOST_KEY_CHECKING')) | bool
+    fail_msg: Enable controller SSH host-key verification for both the seed and join candidates.
+
+- name: Read the seed host public key through its verified Ansible connection
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  become: true
+  delegate_to: "{{ proxmox_cluster_seed }}"
+  register: _proxmox_bootstrap_seed_host_key
+
+- name: Ensure the local root SSH directory exists
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  become: true
+
+- name: Ensure the default Proxmox RSA join key exists locally
+  ansible.builtin.command:
+    argv: [ssh-keygen, -t, rsa, -b, '3072', -N, '', -q, -f, /root/.ssh/id_rsa]
+    creates: /root/.ssh/id_rsa
+  become: true
+
+- name: Read this node's join public key without transferring its private key
+  ansible.builtin.command:
+    argv: [ssh-keygen, -y, -P, '', -f, /root/.ssh/id_rsa]
+  become: true
+  register: _proxmox_bootstrap_join_public_key
+  changed_when: false
+
+- name: Ensure the native Proxmox join public key file matches
+  ansible.builtin.copy:
+    content: "{{ _proxmox_bootstrap_join_public_key.stdout }}\n"
+    dest: /root/.ssh/id_rsa.pub
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Authorize this node for the native join on the seed
+  ansible.builtin.lineinfile:
+    path: /etc/pve/priv/authorized_keys
+    line: "{{ _proxmox_bootstrap_join_public_key.stdout }}"
+    create: true
+    mode: '0600'
+  become: true
+  delegate_to: "{{ proxmox_cluster_seed }}"
+  throttle: 1
+
+- name: Pin the verified seed host key on this candidate
+  ansible.builtin.known_hosts:
+    path: /root/.ssh/known_hosts
+    name: "{{ proxmox_cluster_seed_address | lower }}"
+    key: >-
+      {{ proxmox_cluster_seed_address | lower }} {{ (_proxmox_bootstrap_seed_host_key.content |
+        b64decode).split()[:2] | join(' ') }}
+    state: present
+  become: true

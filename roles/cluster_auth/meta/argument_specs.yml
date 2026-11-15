@@ -1,0 +1,94 @@
+---
+argument_specs:
+  main:
+    short_description: Manage Proxmox authentication realms and access control
+    options:
+      proxmox_auth_cluster:
+        type: str
+        required: true
+        description: Expected quorate Proxmox cluster name.
+      proxmox_auth_oidc_realms:
+        type: list
+        elements: dict
+        description: OpenID Connect realms.
+        options:
+          name:
+            type: str
+            required: true
+            description: Realm ID.
+          issuer:
+            type: str
+            required: true
+            description: HTTPS issuer URL.
+          client_id:
+            type: str
+            required: true
+            description: OIDC client ID.
+          client_secret:
+            type: str
+            description: Confidential client secret.
+          username_claim:
+            type: str
+            description: Unique username claim.
+          autocreate:
+            type: bool
+            description: Allow creation of users at login.
+          scopes:
+            type: str
+            description: Space-separated scopes in addition to openid.
+      proxmox_auth_roles:
+        type: list
+        elements: dict
+        description: Custom role IDs and their exact privilege lists.
+        options:
+          name:
+            type: str
+            required: true
+            description: Custom Proxmox role ID.
+          privileges:
+            type: list
+            elements: str
+            required: true
+            description: Exact list of privileges for the custom role.
+      proxmox_auth_groups:
+        type: list
+        elements: str
+        description: PVE group IDs to ensure present.
+      proxmox_auth_users:
+        type: list
+        elements: str
+        description: Fully qualified PVE user IDs to ensure present.
+      proxmox_auth_memberships:
+        type: list
+        elements: dict
+        description: Group memberships to grant to declared or existing users.
+        options:
+          user:
+            type: str
+            required: true
+            description: Fully qualified Proxmox user ID.
+          groups:
+            type: list
+            elements: str
+            required: true
+            description: Groups to add to the user.
+      proxmox_auth_group_acls:
+        type: list
+        elements: dict
+        description: Group ACL entries to ensure present.
+        options:
+          path:
+            type: str
+            required: true
+            description: PVE access control path.
+          group:
+            type: str
+            required: true
+            description: Existing group or a group declared above.
+          role:
+            type: str
+            required: true
+            description: Existing Proxmox role ID.
+          propagate:
+            type: bool
+            description: Inherit the ACL to child resources.

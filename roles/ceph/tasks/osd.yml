@@ -1,0 +1,47 @@
+---
+- name: Plan OSD creation from stable device identities
+  ansible.builtin.command:
+    argv: "{{ ['/usr/bin/python3', '-c', _proxmox_ceph_osd_probe, _proxmox_ceph_fsid.stdout | trim] + proxmox_ceph_osd_devices }}"
+  vars:
+    _proxmox_ceph_osd_probe: "{{ lookup('ansible.builtin.file', role_path ~ '/files/osd-plan.py') }}"
+  become: true
+  register: _proxmox_ceph_osd_plan
+  changed_when: false
+
+- name: Read bootstrap credentials from this Ceph cluster
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, auth, get, client.bootstrap-osd]
+  become: true
+  register: _proxmox_ceph_bootstrap_keyring
+  changed_when: false
+  no_log: true
+  when: (_proxmox_ceph_osd_plan.stdout | from_json).create | length > 0
+
+- name: Install the active cluster OSD bootstrap keyring
+  ansible.builtin.copy:
+    content: "{{ _proxmox_ceph_bootstrap_keyring.stdout }}\n"
+    dest: /var/lib/ceph/bootstrap-osd/ceph.keyring
+    owner: ceph
+    group: ceph
+    mode: '0600'
+  become: true
+  no_log: true
+  when: (_proxmox_ceph_osd_plan.stdout | from_json).create | length > 0
+
+- name: Provision the intended OSDs
+  ansible.builtin.include_tasks: create_osd.yml
+  loop: "{{ (_proxmox_ceph_osd_plan.stdout | from_json).create }}"
+  loop_control:
+    loop_var: _proxmox_ceph_osd_device
+
+- name: Read OSD device ownership after provisioning
+  ansible.builtin.command:
+    argv: "{{ ['/usr/bin/python3', '-c', _proxmox_ceph_osd_probe, _proxmox_ceph_fsid.stdout | trim] + proxmox_ceph_osd_devices }}"
+  vars:
+    _proxmox_ceph_osd_probe: "{{ lookup('ansible.builtin.file', role_path ~ '/files/osd-plan.py') }}"
+  become: true
+  register: _proxmox_ceph_osd_final
+  changed_when: false
+  failed_when: >-
+    _proxmox_ceph_osd_final.rc != 0 or
+    (_proxmox_ceph_osd_final.stdout | from_json).existing_ids | length != proxmox_ceph_osd_devices | length

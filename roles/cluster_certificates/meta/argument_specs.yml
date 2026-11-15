@@ -1,0 +1,56 @@
+---
+argument_specs:
+  main:
+    short_description: Install a custom or ACME Proxmox node certificate
+    options:
+      proxmox_cert_cluster:
+        type: str
+        required: true
+        description: Name of the target Proxmox cluster.
+      proxmox_cert_node:
+        type: str
+        required: true
+        description: Proxmox node name.
+      proxmox_cert_hostname:
+        type: str
+        required: true
+        description: DNS name served by the node certificate.
+      proxmox_cert_source:
+        type: str
+        required: true
+        choices: [custom, acme]
+        description: Certificate source.
+      proxmox_cert_chain_path:
+        type: path
+        description: Controller path to the custom PEM certificate chain.
+      proxmox_cert_key_path:
+        type: path
+        description: Controller path to the matching private key.
+      proxmox_cert_ca_path:
+        type: path
+        description: Controller PEM CA bundle for validating a private CA certificate.
+      proxmox_cert_replace:
+        type: bool
+        default: false
+        description: Allow replacement of a currently installed custom certificate.
+      proxmox_cert_directory:
+        type: str
+        description: ACME directory URL.
+      proxmox_cert_account:
+        type: str
+        description: Cluster ACME account name.
+      proxmox_cert_contact:
+        type: str
+        description: Contact for new ACME accounts.
+      proxmox_cert_tos_url:
+        type: str
+        description: ACME service terms already accepted by the account owner.
+      proxmox_cert_plugin:
+        type: str
+        description: Existing or managed ACME challenge plugin ID.
+      proxmox_cert_dns_api:
+        type: str
+        description: ACME DNS API driver for creating a named plugin.
+      proxmox_cert_dns_data:
+        type: str
+        description: Secret key-value lines for the DNS API driver.

@@ -1,0 +1,43 @@
+---
+- name: Reconcile local Ceph monitor and manager
+  become: true
+  delegate_to: "{{ _proxmox_ceph_daemon_node }}"
+  block:
+  - name: Check local Ceph monitor state directory
+    ansible.builtin.stat:
+      path: "/var/lib/ceph/mon/ceph-{{ _proxmox_ceph_daemon_node }}"
+    register: _proxmox_ceph_monitor
+
+  - name: Create monitor on its public IPv6 address
+    ansible.builtin.command:
+      argv:
+      - pveceph
+      - mon
+      - create
+      - --mon-address
+      - "{{ hostvars[_proxmox_ceph_daemon_node]._proxmox_ceph_public_address }}"
+    changed_when: true
+    when: not _proxmox_ceph_monitor.stat.exists
+
+  - name: Ensure local monitor starts at boot and is running
+    ansible.builtin.systemd_service:
+      name: "ceph-mon@{{ _proxmox_ceph_daemon_node }}.service"
+      enabled: true
+      state: started
+
+  - name: Check local Ceph manager state directory
+    ansible.builtin.stat:
+      path: "/var/lib/ceph/mgr/ceph-{{ _proxmox_ceph_daemon_node }}"
+    register: _proxmox_ceph_manager
+
+  - name: Create local Ceph manager
+    ansible.builtin.command:
+      argv: [pveceph, mgr, create]
+    changed_when: true
+    when: not _proxmox_ceph_manager.stat.exists
+
+  - name: Ensure local manager starts at boot and is running
+    ansible.builtin.systemd_service:
+      name: "ceph-mgr@{{ _proxmox_ceph_daemon_node }}.service"
+      enabled: true
+      state: started

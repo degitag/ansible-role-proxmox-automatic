@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main:
+    short_description: Converge a Proxmox node into or out of HA maintenance
+    options:
+      proxmox_maintenance_cluster:
+        type: str
+        required: true
+        description: Expected Proxmox cluster name.
+      proxmox_maintenance_node:
+        type: str
+        required: true
+        description: Name of the node being placed into or out of maintenance.
+      proxmox_maintenance_state:
+        type: str
+        required: true
+        choices: [enabled, disabled]
+        description: Intended HA node maintenance request.

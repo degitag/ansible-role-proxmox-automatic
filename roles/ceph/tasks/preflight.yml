@@ -1,0 +1,43 @@
+---
+- name: Verify the complete Ceph node set is in the active play
+  ansible.builtin.assert:
+    that:
+    - proxmox_ceph_nodes | length >= 3
+    - proxmox_ceph_nodes | unique | length == proxmox_ceph_nodes | length
+    - proxmox_ceph_nodes | sort == ansible_play_hosts_all | sort
+    - ansible_play_hosts_all | sort == ansible_play_batch | sort
+
+- name: Read local Proxmox membership
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/status, --output-format, json]
+  become: true
+  check_mode: false
+  changed_when: false
+  register: _proxmox_ceph_membership
+
+- name: Require a quorate Proxmox cluster with all Ceph nodes online
+  ansible.builtin.assert:
+    that:
+    - _cluster.name | default('') == proxmox_ceph_cluster_name
+    - _cluster.quorate | default(false) | bool
+    - proxmox_ceph_nodes | difference(_online_nodes) | length == 0
+    fail_msg: Ceph setup requires quorum and all configured Ceph nodes online.
+  vars:
+    _status: "{{ _proxmox_ceph_membership.stdout | from_json }}"
+    _cluster: "{{ (_status | selectattr('type', 'equalto', 'cluster') | list | first) | default({}) }}"
+    _online_nodes: >-
+      {{ _status | selectattr('type', 'equalto', 'node') | selectattr('online', 'equalto', 1) |
+         map(attribute='name') | list }}
+
+- name: Verify distinct IPv6 networks and active local addresses
+  ansible.builtin.command:
+    argv:
+    - /usr/bin/python3
+    - -c
+    - "{{ lookup('ansible.builtin.file', role_path ~ '/files/check-networks.py') }}"
+    - "{{ proxmox_ceph_public_network }}"
+    - "{{ proxmox_ceph_replication_network }}"
+    - "{{ proxmox_ceph_public_address }}"
+    - "{{ proxmox_ceph_replication_address }}"
+  check_mode: false
+  changed_when: false

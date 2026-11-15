@@ -1,0 +1,5 @@
+---
+- name: Reload systemd units for Ceph clock synchronization
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true

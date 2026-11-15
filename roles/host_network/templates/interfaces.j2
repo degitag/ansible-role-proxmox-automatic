@@ -1,0 +1,51 @@
+# Managed by degitag.proxmox.host_network
+
+auto lo
+iface lo inet loopback
+
+auto {{ proxmox_host_network_management.interface }}
+iface {{ proxmox_host_network_management.interface }} inet static
+    address {{ proxmox_host_network_management.ipv4 }}
+    gateway {{ proxmox_host_network_management.ipv4_gateway }}
+
+iface {{ proxmox_host_network_management.interface }} inet6 static
+    address {{ proxmox_host_network_management.ipv6 }}
+    gateway {{ proxmox_host_network_management.ipv6_gateway }}
+
+{% for interface in proxmox_host_network_manual_links %}
+iface {{ interface }} inet manual
+    mtu {{ proxmox_host_network_bridge_mtu }}
+
+{% endfor %}
+{% for interface in proxmox_host_network_bond_ports %}
+auto {{ interface }}
+iface {{ interface }} inet manual
+    mtu {{ proxmox_host_network_bridge_mtu }}
+
+{% endfor %}
+auto {{ proxmox_host_network_bond }}
+iface {{ proxmox_host_network_bond }} inet manual
+    bond-slaves {{ proxmox_host_network_bond_ports | join(' ') }}
+    bond-mode 802.3ad
+    bond-miimon 100
+    bond-lacp-rate fast
+    bond-xmit-hash-policy layer3+4
+    mtu {{ proxmox_host_network_bridge_mtu }}
+
+auto {{ proxmox_host_network_bridge }}
+iface {{ proxmox_host_network_bridge }} inet manual
+    bridge-ports {{ proxmox_host_network_bond }}
+    bridge-stp off
+    bridge-fd 0
+    bridge-vlan-aware yes
+    bridge-vids {{ proxmox_host_network_bridge_vids }}
+    mtu {{ proxmox_host_network_bridge_mtu }}
+
+{% for vlan in proxmox_host_network_vlans %}
+auto {{ proxmox_host_network_bridge }}.{{ vlan.id }}
+iface {{ proxmox_host_network_bridge }}.{{ vlan.id }} inet6 static
+    address {{ vlan.ipv6 }}
+    mtu {{ proxmox_host_network_bridge_mtu }}
+
+{% endfor %}
+source /etc/network/interfaces.d/*

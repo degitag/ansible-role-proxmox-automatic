@@ -1,0 +1,52 @@
+---
+- name: Prepare Thunderbolt networking across host restarts
+  become: true
+  block:
+  - name: Validate physical link and interface identities
+    ansible.builtin.import_tasks: validate.yml
+
+  - name: Install persistent Thunderbolt module configuration
+    ansible.builtin.copy:
+      dest: /etc/modules-load.d/pve-thunderbolt.conf
+      owner: root
+      group: root
+      mode: '0644'
+      content: "thunderbolt_net\n"
+
+  - name: Install stable names and MTU for Thunderbolt links
+    ansible.builtin.template:
+      src: pve-thunderbolt.link.j2
+      dest: "/etc/systemd/network/10-{{ item.name }}.link"
+      owner: root
+      group: root
+      mode: '0644'
+    loop: "{{ proxmox_thunderbolt_links }}"
+    notify:
+    - Reload Thunderbolt udev rules
+    - Refresh Thunderbolt initramfs configuration
+
+  - name: Install device-bound Thunderbolt activation service
+    ansible.builtin.template:
+      src: pve-thunderbolt-ifup@.service.j2
+      dest: /etc/systemd/system/pve-thunderbolt-ifup@.service
+      owner: root
+      group: root
+      mode: '0644'
+    notify: Reload Thunderbolt systemd units
+
+  - name: Install Thunderbolt hotplug rules
+    ansible.builtin.template:
+      src: pve-thunderbolt-hotplug.rules.j2
+      dest: /etc/udev/rules.d/90-pve-thunderbolt-hotplug.rules
+      owner: root
+      group: root
+      mode: '0644'
+    notify: Reload Thunderbolt udev rules
+
+  - name: Apply Thunderbolt rules before loading the driver
+    ansible.builtin.meta: flush_handlers
+
+  - name: Load the Thunderbolt network driver
+    community.general.modprobe:
+      name: thunderbolt_net
+      state: present

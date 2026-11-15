@@ -1,0 +1,27 @@
+---
+argument_specs:
+  main:
+    short_description: Reboot a Proxmox cluster node after HA, quorum and storage checks
+    options:
+      proxmox_reboot_cluster:
+        type: str
+        required: true
+        description: Expected Proxmox cluster name.
+      proxmox_reboot_nodes:
+        type: list
+        elements: str
+        required: true
+        description: Exact expected online Proxmox members.
+      proxmox_reboot_ceph:
+        type: bool
+        default: false
+        description: Verify internal Ceph can tolerate the stop and has recovered afterward.
+      proxmox_reboot_upgrade_packages:
+        type: list
+        elements: str
+        default: []
+        description: Installed APT packages to upgrade before reboot.
+      proxmox_reboot_full_upgrade:
+        type: bool
+        default: false
+        description: Apply APT dist-upgrade with removals forbidden before reboot.

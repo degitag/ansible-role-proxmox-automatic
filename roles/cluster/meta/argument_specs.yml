@@ -1,0 +1,59 @@
+---
+argument_specs:
+  main:
+    short_description: Inspect and validate Proxmox cluster membership
+    options:
+      proxmox_cluster_name:
+        type: str
+        default: ''
+        description: Expected Corosync cluster name. Empty runs the audit without a desired topology.
+      proxmox_cluster_nodes:
+        type: list
+        elements: str
+        default: []
+        description: Exact set of expected Proxmox node names.
+  bootstrap:
+    short_description: Create a Proxmox cluster and join standalone members
+    options:
+      proxmox_cluster_name:
+        type: str
+        required: true
+        description: Intended Corosync cluster name.
+      proxmox_cluster_nodes:
+        type: list
+        elements: str
+        required: true
+        description: Node names in join order.
+      proxmox_cluster_seed:
+        type: str
+        required: true
+        description: Inventory name of the seed node.
+      proxmox_cluster_seed_address:
+        type: str
+        required: true
+        description: Verified root SSH destination of the seed.
+      proxmox_cluster_links:
+        type: list
+        elements: str
+        required: true
+        description: Local Corosync addresses in order of preference.
+      proxmox_cluster_manage_join_trust:
+        type: bool
+        default: false
+        description: Set up root join keys and pin the seed host key for standalone candidates.
+  migration:
+    short_description: Set and validate the shared encrypted migration network
+    options:
+      proxmox_cluster_name:
+        type: str
+        required: true
+        description: Intended Corosync cluster name.
+      proxmox_cluster_nodes:
+        type: list
+        elements: str
+        required: true
+        description: Exact set of expected Proxmox node names in one play.
+      proxmox_cluster_migration_network:
+        type: str
+        required: true
+        description: IPv4 or IPv6 network CIDR with exactly one active address on each node.

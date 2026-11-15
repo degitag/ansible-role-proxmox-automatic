@@ -1,0 +1,6 @@
+---
+proxmox_host_installer_assistant: /usr/bin/proxmox-auto-install-assistant
+proxmox_host_installer_filesystem: ext4
+proxmox_host_installer_country: de
+proxmox_host_installer_keyboard: de
+proxmox_host_installer_timezone: Europe/Berlin

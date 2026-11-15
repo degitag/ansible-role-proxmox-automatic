@@ -1,0 +1,79 @@
+---
+- name: Configure and verify the local host network
+  become: true
+  any_errors_fatal: true
+  vars:
+    _proxmox_host_network_config:
+      management: "{{ proxmox_host_network_management }}"
+      bond: "{{ proxmox_host_network_bond }}"
+      ports: "{{ proxmox_host_network_bond_ports }}"
+      bridge: "{{ proxmox_host_network_bridge }}"
+      mtu: "{{ proxmox_host_network_bridge_mtu }}"
+      bridge_vids: "{{ proxmox_host_network_bridge_vids }}"
+      vlans: "{{ proxmox_host_network_vlans }}"
+  block:
+  - name: Verify intended node identity
+    ansible.builtin.command:
+      argv: [hostname, -s]
+    register: _proxmox_host_network_hostname
+    failed_when: _proxmox_host_network_hostname.stdout != proxmox_host_network_node
+    check_mode: false
+    changed_when: false
+
+  - name: Validate host network input shape
+    ansible.builtin.assert:
+      that:
+      - _names | unique | length == _names | length
+      - _names | reject('match', '^[0-9A-Za-z_-]{1,15}$') | list | length == 0
+      - proxmox_host_network_bond_ports | length >= 2
+      - proxmox_host_network_bridge_mtu | int >= 1500
+      - proxmox_host_network_bridge_mtu | int <= 65535
+      - proxmox_host_network_bridge_vids is match('^[0-9]+(?:-[0-9]+)?(?:[ ][0-9]+(?:-[0-9]+)?)*$')
+      - proxmox_host_network_vlans | map(attribute='id') | unique | length == proxmox_host_network_vlans | length
+    vars:
+      _names: >-
+        {{ [proxmox_host_network_management.interface, proxmox_host_network_bond, proxmox_host_network_bridge]
+         + proxmox_host_network_bond_ports + proxmox_host_network_manual_links }}
+
+  - name: Validate networking semantics and verify physical interfaces
+    ansible.builtin.command:
+      argv:
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/verify-network.py') }}"
+      - "{{ _proxmox_host_network_config | to_json }}"
+      - inputs
+    changed_when: false
+    check_mode: false
+
+  - name: Detect pending manual or API network changes
+    ansible.builtin.stat:
+      path: /etc/network/interfaces.new
+    register: _proxmox_host_network_pending
+
+  - name: Require a clean Proxmox network configuration
+    ansible.builtin.assert:
+      that: not _proxmox_host_network_pending.stat.exists
+      fail_msg: Resolve pending changes in /etc/network/interfaces.new before applying the inventory.
+
+  - name: Compare the desired configuration with the current file
+    ansible.builtin.stat:
+      path: /etc/network/interfaces
+      checksum_algorithm: sha1
+    register: _proxmox_host_network_current
+
+  - name: Determine if the network file changes
+    ansible.builtin.set_fact:
+      _proxmox_host_network_changed: >-
+        {{ _proxmox_host_network_current.stat.checksum | default('') !=
+           (lookup('ansible.builtin.template', 'interfaces.j2') | hash('sha1')) }}
+
+  - name: Apply the validated configuration with an independent rollback timer
+    ansible.builtin.include_tasks: apply.yml
+    when:
+    - _proxmox_host_network_changed
+    - not ansible_check_mode
+
+  - name: Verify live network addresses and default routes
+    ansible.builtin.include_tasks: verify.yml
+    when: not _proxmox_host_network_changed

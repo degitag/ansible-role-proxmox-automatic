@@ -1,0 +1,45 @@
+---
+- name: Manage the Proxmox configuration backup
+  become: true
+  block:
+  - name: Read local Proxmox membership
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/status, --output-format, json]
+    register: _proxmox_backup_membership
+    check_mode: false
+    changed_when: false
+    when: proxmox_backup_action | default('create') == 'create'
+
+  - name: Verify cluster identity, node and quorum before a backup
+    ansible.builtin.assert:
+      that:
+      - _status | selectattr('type', 'equalto', 'cluster') | selectattr('name', 'equalto', proxmox_backup_cluster) |
+        selectattr('quorate', 'equalto', 1) | list | length == 1
+      - _status | selectattr('type', 'equalto', 'node') | selectattr('local', 'equalto', 1) |
+        map(attribute='name') | list == [proxmox_backup_node]
+    vars:
+      _status: "{{ _proxmox_backup_membership.stdout | from_json }}"
+    when: proxmox_backup_action | default('create') == 'create'
+
+  - name: Create or verify a private configuration archive
+    ansible.builtin.command:
+      argv:
+      - timeout
+      - '60'
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/backup-config.py') }}"
+      - "{{ proxmox_backup_action | default('create') }}"
+      - "{{ proxmox_backup_path }}"
+      - "{{ proxmox_backup_cluster }}"
+      - "{{ proxmox_backup_node }}"
+    register: _proxmox_backup_result
+    check_mode: false
+    changed_when: "_proxmox_backup_result.rc == 0 and
+                   (_proxmox_backup_result.stdout | from_json).created"
+    when: not ansible_check_mode or proxmox_backup_action | default('create') == 'verify'
+
+  - name: Report verified configuration backup metadata
+    ansible.builtin.debug:
+      msg: "{{ _proxmox_backup_result.stdout | from_json }}"
+    when: not _proxmox_backup_result.skipped | default(false)

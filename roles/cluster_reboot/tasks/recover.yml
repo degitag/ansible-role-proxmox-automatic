@@ -1,0 +1,82 @@
+---
+- name: Wait for local Proxmox APIs and HA services
+  ansible.builtin.command:
+    argv: [systemctl, is-active, pve-cluster.service, pvedaemon.service, pveproxy.service, pve-ha-crm.service, pve-ha-lrm.service]
+  register: _proxmox_reboot_services
+  changed_when: false
+  retries: 50
+  delay: 5
+  until: _proxmox_reboot_services.rc == 0
+
+- name: Wait until the node again sees the whole quorate cluster
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/status, --output-format, json]
+  register: _proxmox_reboot_membership
+  changed_when: false
+  retries: 40
+  delay: 5
+  until:
+  - _proxmox_reboot_membership.rc == 0
+  - _rows | selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
+  - >-
+    (_rows | selectattr('type', 'equalto', 'node') | selectattr('online', 'equalto', 1) |
+     map(attribute='name') | sort) == proxmox_reboot_nodes | sort
+  vars:
+    _rows: "{{ _proxmox_reboot_membership.stdout | from_json }}"
+
+- name: Wait for all Corosync links to connect to every peer
+  ansible.builtin.command:
+    argv: [corosync-cfgtool, -s]
+  register: _proxmox_reboot_knet
+  changed_when: false
+  retries: 20
+  delay: 3
+  until:
+  - _proxmox_reboot_knet.rc == 0
+  - _links | length > 0
+  - _links | map('regex_findall', _connected) | map('length') | unique | list == [proxmox_reboot_nodes | length - 1]
+  vars:
+    _links: "{{ _proxmox_reboot_knet.stdout.split('LINK ID ')[1:] }}"
+    _connected: '(?m)^\s*nodeid:\s*[0-9]+:\s*connected\s*$'
+
+- name: Wait for all original Ceph monitors and healthy storage
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, status, --format, json]
+  register: _proxmox_reboot_ceph_after
+  changed_when: false
+  retries: 60
+  delay: 5
+  until:
+  - _proxmox_reboot_ceph_after.rc == 0
+  - _status.health.status == 'HEALTH_OK'
+  - _before.quorum_names | difference(_status.quorum_names) | length == 0
+  vars:
+    _status: "{{ _proxmox_reboot_ceph_after.stdout | from_json }}"
+    _before: "{{ _proxmox_reboot_ceph_before.stdout | from_json }}"
+  when: proxmox_reboot_ceph | default(false)
+
+- name: Verify each pre-reboot local OSD is up and in
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, dump, --format, json]
+  register: _proxmox_reboot_osd_after
+  changed_when: false
+  retries: 20
+  delay: 3
+  until:
+  - _proxmox_reboot_osd_after.rc == 0
+  - _local_osds | difference(_active_osds) | length == 0
+  vars:
+    _local_osds: "{{ _proxmox_reboot_ceph_osds.stdout | from_json }}"
+    _active_osds: >-
+      {{ (_proxmox_reboot_osd_after.stdout | from_json).osds |
+         selectattr('up', 'equalto', 1) | selectattr('in', 'equalto', 1) | map(attribute='osd') | list }}
+  when: proxmox_reboot_ceph | default(false)
+
+- name: Return the recovered node to normal HA scheduling
+  ansible.builtin.include_role:
+    name: degitag.proxmox.cluster_maintenance
+  vars:
+    proxmox_maintenance_cluster: "{{ proxmox_reboot_cluster }}"
+    proxmox_maintenance_node: "{{ inventory_hostname }}"
+    proxmox_maintenance_state: disabled
+  when: not _proxmox_reboot_keep_maintenance

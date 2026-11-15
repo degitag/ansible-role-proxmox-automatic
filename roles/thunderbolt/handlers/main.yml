@@ -1,0 +1,17 @@
+---
+- name: Reload Thunderbolt udev rules
+  ansible.builtin.command:
+    argv: [udevadm, control, --reload-rules]
+  become: true
+  changed_when: true
+
+- name: Refresh Thunderbolt initramfs configuration
+  ansible.builtin.command:
+    argv: [update-initramfs, -u, -k, all]
+  become: true
+  changed_when: true
+
+- name: Reload Thunderbolt systemd units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true

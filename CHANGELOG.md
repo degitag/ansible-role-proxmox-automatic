@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+- Eigenständige Rolle zur lesenden Prüfung von Proxmox-Mitgliedschaft und Quorum sowie zum Bootstrap neuer Proxmox-Cluster.
+- Clusterweiter Standard für verschlüsselte Migrationen über ein geprüftes Netz.
+- Ceph-Einstieg für Paketinstallation, IPv6-Netzprüfung und Monitor-/Manager-Dienste sowie OSDs und replizierten RBD-Storage.
+- Prüfung der RBD-Anwendung, des PG-Autoscalings und der CRUSH-Platzierung auf getrennten Hosts.
+- Optionale Chrony-Synchronisierung vor dem Ceph-Monitorstart.
+- Eigenständige OpenFabric-Rolle für IPv6-SDN und Erreichbarkeitsprüfung zwischen Knoten.
+- Abnahme direkter OpenFabric-Routen über die erwartete Thunderbolt-Schnittstelle.
+- Thunderbolt-Rolle für persistente Schnittstellen und Ceph-Ethernet-Fallback.
+- Clusterweite Verwaltung von OpenID-Realms und Gruppenrechten.
+- Benutzerdefinierte Proxmox-Rollen mit deklarativer Privilegienliste und Schutz eingebauter Rollen.
+- Knoten-Zertifikatsrolle für PEM-Import, ACME und HTTPS-Prüfung.
+- Rolle zur Erzeugung geprüfter, hostbezogener Proxmox-VE-Installationsmedien.
+- Persistente Hostnetze für Proxmox mit Management, LACP, VLANs und unabhängigem Rollback.
+- Optionaler SSH-Vertrauensaufbau für Standalone-Kandidaten vor dem Clusterbeitritt.
+- Online-Sicherung und Integritätsprüfung der Proxmox-Clusterkonfiguration.
+- Geprüfte Bereitstellung der Clusterkonfiguration für die Wiederherstellung auf einem isolierten Host.
+- Rolle zum Ein- und Ausschalten des Proxmox-HA-Wartungsmodus je Knoten.
+- Serielle APT-Updates und Knoten-Neustarts mit HA-Wartung, Quorum- und Ceph-Prüfungen.
+
 ## [0.2.0] - 2026-10-27
 
 - Gemeinsamer Vertrag `degitag-collections-v1` mit Infrastructure, Database, Monitoring und K3s abgestimmt.

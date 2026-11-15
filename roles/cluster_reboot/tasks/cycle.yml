@@ -1,0 +1,80 @@
+---
+- name: Verify all cluster members are online before maintenance
+  ansible.builtin.include_role:
+    name: degitag.proxmox.cluster
+  vars:
+    proxmox_cluster_name: "{{ proxmox_reboot_cluster }}"
+    proxmox_cluster_nodes: "{{ proxmox_reboot_nodes }}"
+
+- name: Read votequorum and the local node vote count
+  ansible.builtin.command:
+    argv: [corosync-quorumtool, -s]
+  register: _proxmox_reboot_votes
+  check_mode: false
+  changed_when: false
+
+- name: Verify the remaining votes would preserve quorum
+  ansible.builtin.assert:
+    that:
+    - _total | length == 1
+    - _threshold | length == 1
+    - _local | length == 1
+    - (_total[0] | int) - (_local[0] | int) >= (_threshold[0] | int)
+  vars:
+    _total: "{{ _proxmox_reboot_votes.stdout | regex_findall('(?m)^Total votes:[ ]*([0-9]+)') }}"
+    _threshold: "{{ _proxmox_reboot_votes.stdout | regex_findall('(?m)^Quorum:[ ]*([0-9]+)') }}"
+    _local: "{{ _proxmox_reboot_votes.stdout | regex_findall('(?m)^[ ]*[0-9]+[ ]+([0-9]+)[ ]+.* [(]local[)]$') }}"
+
+- name: Verify Ceph is healthy and can tolerate this node stopping
+  ansible.builtin.import_tasks: ceph_before.yml
+  when: proxmox_reboot_ceph | default(false)
+
+- name: Put the node in confirmed HA maintenance
+  ansible.builtin.include_role:
+    name: degitag.proxmox.cluster_maintenance
+  vars:
+    proxmox_maintenance_cluster: "{{ proxmox_reboot_cluster }}"
+    proxmox_maintenance_node: "{{ inventory_hostname }}"
+    proxmox_maintenance_state: enabled
+
+- name: Remember whether maintenance was already requested before the reboot
+  ansible.builtin.set_fact:
+    _proxmox_reboot_keep_maintenance: "{{ _request.maintenance | default(false) | bool }}"
+  vars:
+    _manager: "{{ (_proxmox_maintenance_before.stdout | from_json).manager_status }}"
+    _request: "{{ (_manager.node_request | default({})).get(inventory_hostname, {}) }}"
+
+- name: Confirm no remaining local guest is running
+  ansible.builtin.command:
+    argv: [pvesh, get, /cluster/resources, --type, vm, --output-format, json]
+  register: _proxmox_reboot_guests
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _proxmox_reboot_guests.rc != 0 or
+    (_proxmox_reboot_guests.stdout | from_json |
+     selectattr('node', 'equalto', inventory_hostname) |
+     rejectattr('status', 'equalto', 'stopped') | list | length) != 0
+
+- name: Apply simulation-checked APT upgrades during maintenance
+  ansible.builtin.command:
+    argv: >-
+      {{ ['apt-get', '-y', '--no-remove', '-o', 'Dpkg::Options::=--force-confold']
+         + _proxmox_reboot_upgrade_argv }}
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    LC_ALL: C
+  changed_when: true
+  when:
+  - _proxmox_reboot_upgrade_requested
+  - not ansible_check_mode
+
+- name: Reboot the verified node and wait for SSH
+  ansible.builtin.reboot:
+    msg: Ansible Proxmox cluster maintenance
+    reboot_timeout: 600
+    post_reboot_delay: 10
+
+- name: Verify recovered node state before leaving maintenance
+  ansible.builtin.import_tasks: recover.yml
+  when: not ansible_check_mode

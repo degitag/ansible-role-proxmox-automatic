@@ -1,0 +1,22 @@
+---
+- name: Verify management SSH over both configured address families
+  ansible.builtin.wait_for:
+    host: "{{ item.split('/')[0] }}"
+    port: 22
+    timeout: 8
+  delegate_to: localhost
+  become: false
+  loop:
+  - "{{ proxmox_host_network_management.ipv4 }}"
+  - "{{ proxmox_host_network_management.ipv6 }}"
+
+- name: Verify active addresses, default routes and bond topology
+  ansible.builtin.command:
+    argv:
+    - /usr/bin/python3
+    - -c
+    - "{{ lookup('ansible.builtin.file', role_path ~ '/files/verify-network.py') }}"
+    - "{{ _proxmox_host_network_config | to_json }}"
+    - runtime
+  changed_when: false
+  check_mode: false

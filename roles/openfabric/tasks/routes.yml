@@ -1,0 +1,32 @@
+---
+- name: Validate direct routes against the expected fabric peers
+  ansible.builtin.assert:
+    that:
+    - _direct_peers | unique | length == _direct_peers | length
+    - _direct_peers | difference(_peer_addresses) | length == 0
+  vars:
+    _direct_peers: >-
+      {{ proxmox_openfabric_interfaces | selectattr('direct_peer', 'defined') |
+         map(attribute='direct_peer') | list }}
+    _peer_addresses: >-
+      {{ ansible_play_hosts_all | reject('equalto', inventory_hostname) |
+         map('extract', hostvars, '_proxmox_openfabric_address') | list }}
+
+- name: Verify peers use OpenFabric and any declared direct interface
+  ansible.builtin.command:
+    argv: [ip, -j, -6, route, get, "{{ _peer_address }}", from, "{{ proxmox_openfabric_address }}"]
+  loop: "{{ ansible_play_hosts_all | reject('equalto', inventory_hostname) | list }}"
+  register: _proxmox_openfabric_route
+  changed_when: false
+  retries: 20
+  delay: 3
+  until:
+  - _proxmox_openfabric_route.rc == 0
+  - _selected_route.protocol | default('') == 'openfabric'
+  - _direct_link is none or _selected_route.dev | default('') == _direct_link.name
+  vars:
+    _peer_address: "{{ hostvars[item]._proxmox_openfabric_address }}"
+    _selected_route: "{{ _proxmox_openfabric_route.stdout | from_json | first }}"
+    _direct_link: >-
+      {{ (proxmox_openfabric_interfaces | selectattr('direct_peer', 'defined') |
+          selectattr('direct_peer', 'equalto', _peer_address) | first) | default(none) }}

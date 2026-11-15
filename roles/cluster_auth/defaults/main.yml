@@ -1,0 +1,7 @@
+---
+proxmox_auth_oidc_realms: []
+proxmox_auth_roles: []
+proxmox_auth_groups: []
+proxmox_auth_users: []
+proxmox_auth_group_acls: []
+proxmox_auth_memberships: []
