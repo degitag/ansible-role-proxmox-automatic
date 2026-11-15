@@ -13,6 +13,13 @@ benennt den erwarteten Proxmox-Cluster. Das Repository wird über
 `proxmox_ceph_repository` gewählt. Bei einem vorhandenen Ceph-Cluster müssen
 die konfigurierten Netze mit den Sollwerten übereinstimmen.
 
+Mit `proxmox_ceph_wait_for_chrony: true` aktiviert die Rolle den
+vorhandenen Dienst `chrony-wait.service`. Voraussetzung ist ein laufender
+Chrony mit erreichbaren Zeitquellen. Beim Boot wartet systemd vor
+`time-sync.target` bis zu 90 Sekunden auf eine verbleibende lokale
+Zeitabweichung unter 20 ms. Ceph-Monitore starten nach diesem Ziel.
+Der Rollenlauf prüft die Synchronisierung auch auf bereits laufenden Hosts.
+
 Je Host benennt `proxmox_ceph_osd_devices` die vorgesehenen ganzen Datenträger
 unter `/dev/disk/by-id/`. Die Rolle akzeptiert leere Datenträger sowie bereits
 zum aktiven Ceph-FSID gehörige OSDs. Bei fremden Signaturen oder Partitionen

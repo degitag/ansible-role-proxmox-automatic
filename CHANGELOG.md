@@ -4,6 +4,7 @@
 
 - Eigenständige Rolle zur lesenden Prüfung von Proxmox-Mitgliedschaft und Quorum sowie zum Bootstrap neuer Proxmox-Cluster.
 - Ceph-Einstieg für Paketinstallation, IPv6-Netzprüfung und Monitor-/Manager-Dienste sowie OSDs und replizierten RBD-Storage.
+- Optionale Chrony-Synchronisierung vor dem Ceph-Monitorstart.
 - Eigenständige OpenFabric-Rolle für IPv6-SDN und Erreichbarkeitsprüfung zwischen Knoten.
 - Thunderbolt-Rolle für persistente Schnittstellen und Ceph-Ethernet-Fallback.
 - Clusterweite Verwaltung von OpenID-Realms und Gruppenrechten.

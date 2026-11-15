@@ -1,0 +1,35 @@
+---
+- name: Create the Chrony wait unit drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/chrony-wait.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Bound Chrony startup wait and require local clock correction under 20 ms
+  ansible.builtin.copy:
+    src: 50-proxmox-ceph.conf
+    dest: /etc/systemd/system/chrony-wait.service.d/50-proxmox-ceph.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: Reload systemd units for Ceph clock synchronization
+  when: not ansible_check_mode
+
+- name: Load the Chrony unit before checking synchronization
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable the native clock synchronization wait at startup
+  ansible.builtin.systemd_service:
+    name: chrony-wait.service
+    enabled: true
+    state: started
+  become: true
+
+- name: Verify current local clock synchronization
+  ansible.builtin.command:
+    argv: [chronyc, -h, '127.0.0.1,::1', waitsync, '20', '0.02', '0.0', '2']
+  changed_when: false

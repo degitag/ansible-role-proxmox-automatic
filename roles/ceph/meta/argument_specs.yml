@@ -28,6 +28,10 @@ argument_specs:
         type: str
         required: true
         description: Local address for OSD replication.
+      proxmox_ceph_wait_for_chrony:
+        type: bool
+        default: false
+        description: Enable chrony-wait before the time synchronization target and verify local synchronization.
       proxmox_ceph_repository:
         type: str
         choices: [enterprise, no-subscription, manual]
