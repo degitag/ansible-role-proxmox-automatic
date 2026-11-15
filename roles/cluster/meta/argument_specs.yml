@@ -41,3 +41,19 @@ argument_specs:
         type: bool
         default: false
         description: Set up root join keys and pin the seed host key for standalone candidates.
+  migration:
+    short_description: Set and validate the shared encrypted migration network
+    options:
+      proxmox_cluster_name:
+        type: str
+        required: true
+        description: Intended Corosync cluster name.
+      proxmox_cluster_nodes:
+        type: list
+        elements: str
+        required: true
+        description: Exact set of expected Proxmox node names in one play.
+      proxmox_cluster_migration_network:
+        type: str
+        required: true
+        description: IPv4 or IPv6 network CIDR with exactly one active address on each node.

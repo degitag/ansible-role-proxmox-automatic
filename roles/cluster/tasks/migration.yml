@@ -1,0 +1,76 @@
+---
+- name: Configure the cluster-wide migration network
+  any_errors_fatal: true
+  block:
+  - name: Require the complete cluster in one play batch
+    ansible.builtin.assert:
+      that:
+      - proxmox_cluster_nodes | length > 1
+      - proxmox_cluster_nodes | sort == ansible_play_batch | sort
+
+  - name: Verify the identity and online membership of the cluster
+    ansible.builtin.import_tasks: main.yml
+
+  - name: Find the one usable local address in the migration CIDR
+    ansible.builtin.command:
+      argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import ipaddress, json, subprocess, sys
+        network = ipaddress.ip_network(sys.argv[1])
+        interfaces = json.loads(subprocess.check_output(["ip", "-j", "address", "show", "up"]))
+        addresses = [
+            ipaddress.ip_address(address["local"])
+            for interface in interfaces
+            for address in interface.get("addr_info", [])
+            if not any(address.get(flag) for flag in ("tentative", "dadfailed", "deprecated"))
+            and ipaddress.ip_address(address["local"]) in network
+        ]
+        if len(addresses) != 1:
+            sys.exit(f"Expected exactly one usable address in {network}, found {len(addresses)}")
+        print(addresses[0])
+      - "{{ proxmox_cluster_migration_network }}"
+    register: _proxmox_migration_address
+    changed_when: false
+    check_mode: false
+
+  - name: Verify that cluster nodes have distinct migration addresses
+    ansible.builtin.assert:
+      that: _addresses | unique | length == proxmox_cluster_nodes | length
+    vars:
+      _addresses: >-
+        {{ proxmox_cluster_nodes | map('extract', hostvars) |
+           map(attribute='_proxmox_migration_address.stdout') | list }}
+
+  - name: Apply and verify the shared configuration from the first node
+    become: true
+    when: inventory_hostname == proxmox_cluster_nodes[0]
+    vars:
+      _migration_setting: "secure,network={{ proxmox_cluster_migration_network }}"
+    block:
+    - name: Read shared Proxmox datacenter options
+      ansible.builtin.command:
+        argv: [pvesh, get, /cluster/options, --output-format, json]
+      register: _proxmox_migration_before
+      changed_when: false
+      check_mode: false
+
+    - name: Set encrypted migrations over the declared network
+      ansible.builtin.command:
+        argv: [pvesh, set, /cluster/options, --migration, "{{ _migration_setting }}"]
+      changed_when: true
+      when: >-
+        ((_proxmox_migration_before.stdout | from_json).migration | default('') |
+         replace('type=', '') | split(',') | sort) != (_migration_setting | split(',') | sort)
+
+    - name: Read the persisted migration configuration
+      ansible.builtin.command:
+        argv: [pvesh, get, /cluster/options, --output-format, json]
+      register: _proxmox_migration_after
+      changed_when: false
+      failed_when: >-
+        _proxmox_migration_after.rc != 0 or
+        ((_proxmox_migration_after.stdout | from_json).migration | default('') |
+         replace('type=', '') | split(',') | sort) != (_migration_setting | split(',') | sort)
+      when: not ansible_check_mode

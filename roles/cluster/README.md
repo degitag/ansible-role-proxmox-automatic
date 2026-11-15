@@ -34,3 +34,9 @@ der Standalone-Kandidaten im Proxmox-Schlüsselspeicher des Seeds.
 Der Bootstrap stoppt bei widersprüchlicher Mitgliedschaft, fehlendem Quorum
 oder Gästen auf einem Beitrittskandidaten. Im Check-Modus laufen die
 Voraussetzungsprüfungen.
+
+`tasks_from: migration` setzt eine verschlüsselte Migration über
+`proxmox_cluster_migration_network`. Alle Clusterknoten müssen für diesen
+Aufruf online und im selben Play-Batch sein. Jeder Knoten benötigt genau
+eine eindeutige aktive Adresse im konfigurierten CIDR. Die Rolle liest
+die gewünschte Einstellung nach dem Schreiben erneut aus.

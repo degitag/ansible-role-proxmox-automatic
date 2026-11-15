@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Eigenständige Rolle zur lesenden Prüfung von Proxmox-Mitgliedschaft und Quorum sowie zum Bootstrap neuer Proxmox-Cluster.
+- Clusterweiter Standard für verschlüsselte Migrationen über ein geprüftes Netz.
 - Ceph-Einstieg für Paketinstallation, IPv6-Netzprüfung und Monitor-/Manager-Dienste sowie OSDs und replizierten RBD-Storage.
 - Prüfung der RBD-Anwendung, des PG-Autoscalings und der CRUSH-Platzierung auf getrennten Hosts.
 - Optionale Chrony-Synchronisierung vor dem Ceph-Monitorstart.
