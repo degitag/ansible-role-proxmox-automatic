@@ -15,7 +15,7 @@
       - mon
       - create
       - --mon-address
-      - "{{ hostvars[_proxmox_ceph_daemon_node].proxmox_ceph_public_address }}"
+      - "{{ hostvars[_proxmox_ceph_daemon_node]._proxmox_ceph_public_address }}"
     changed_when: true
     when: not _proxmox_ceph_monitor.stat.exists
 

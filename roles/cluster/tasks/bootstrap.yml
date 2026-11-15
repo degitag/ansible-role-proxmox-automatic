@@ -120,15 +120,17 @@
     - not _proxmox_cluster_summary
     - not ansible_check_mode
 
-  - name: Wait for seed quorum
+  - name: Wait for pmxcfs to see quorum on the seed
     ansible.builtin.command:
-      argv: [pvecm, status]
+      argv: [pvesh, get, /cluster/status, --output-format, json]
     become: true
     register: _proxmox_bootstrap_seed_status
     changed_when: false
     until:
     - _proxmox_bootstrap_seed_status.rc == 0
-    - _proxmox_bootstrap_seed_status.stdout is search('(?m)^Quorate:\s+Yes$')
+    - >-
+      _proxmox_bootstrap_seed_status.stdout | from_json |
+      selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
     retries: 20
     delay: 3
     when:
@@ -136,19 +138,32 @@
     - not ansible_check_mode
 
   - name: Join standalone nodes one at a time
-    ansible.builtin.command:
-      argv: >-
-        {{ ['pvecm', 'add', proxmox_cluster_seed_address, '--use_ssh', '1']
-           + hostvars[item]._proxmox_bootstrap_link_args }}
-    become: true
-    delegate_to: "{{ item }}"
+    ansible.builtin.include_tasks: join.yml
     loop: "{{ proxmox_cluster_nodes | reject('equalto', proxmox_cluster_seed) | list }}"
-    changed_when: true
+    loop_control:
+      loop_var: _proxmox_join_node
     when:
     - inventory_hostname == proxmox_cluster_seed
-    - not hostvars[item]._proxmox_cluster_summary
+    - not hostvars[_proxmox_join_node]._proxmox_cluster_summary
     - not ansible_check_mode
 
   - name: Verify resulting cluster on every node
     ansible.builtin.include_tasks: main.yml
+    when: not ansible_check_mode
+
+  - name: Verify every Corosync link connects to all peers
+    ansible.builtin.command:
+      argv: [corosync-cfgtool, -s]
+    become: true
+    register: _proxmox_bootstrap_knet
+    changed_when: false
+    retries: 15
+    delay: 3
+    until:
+    - _proxmox_bootstrap_knet.rc == 0
+    - _links | length == proxmox_cluster_links | length
+    - _links | map('regex_findall', _connection_pattern) | map('length') | unique | list == [proxmox_cluster_nodes | length - 1]
+    vars:
+      _links: "{{ _proxmox_bootstrap_knet.stdout.split('LINK ID ')[1:] }}"
+      _connection_pattern: '(?m)^\s*nodeid:\s*[0-9]+:\s*connected\s*$'
     when: not ansible_check_mode

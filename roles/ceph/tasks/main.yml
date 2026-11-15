@@ -29,6 +29,10 @@
     become: true
     when: not ansible_check_mode
 
+  - name: Publish resolved monitor address for serial peer creation
+    ansible.builtin.set_fact:
+      _proxmox_ceph_public_address: "{{ proxmox_ceph_public_address }}"
+
   - name: Reconcile monitor and manager services one node at a time
     ansible.builtin.include_tasks: daemons.yml
     loop: "{{ proxmox_ceph_nodes }}"
