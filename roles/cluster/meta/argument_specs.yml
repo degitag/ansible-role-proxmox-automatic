@@ -12,3 +12,28 @@ argument_specs:
         elements: str
         default: []
         description: Exact set of expected Proxmox node names.
+  bootstrap:
+    short_description: Create a Proxmox cluster and join standalone members
+    options:
+      proxmox_cluster_name:
+        type: str
+        required: true
+        description: Intended Corosync cluster name.
+      proxmox_cluster_nodes:
+        type: list
+        elements: str
+        required: true
+        description: Node names in join order.
+      proxmox_cluster_seed:
+        type: str
+        required: true
+        description: Inventory name of the seed node.
+      proxmox_cluster_seed_address:
+        type: str
+        required: true
+        description: Verified root SSH destination of the seed.
+      proxmox_cluster_links:
+        type: list
+        elements: str
+        required: true
+        description: Local Corosync addresses in order of preference.

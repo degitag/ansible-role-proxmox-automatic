@@ -9,20 +9,8 @@
     _cluster_name: "{{ proxmox_cluster_name | default('') }}"
     _cluster_nodes: "{{ proxmox_cluster_nodes | default([]) }}"
 
-- name: Read local Proxmox cluster status
-  ansible.builtin.command:
-    argv: [pvesh, get, /cluster/status, --output-format, json]
-  register: _proxmox_cluster_status
-  become: true
-  check_mode: false
-  changed_when: false
-
-- name: Extract Corosync and node status
-  ansible.builtin.set_fact:
-    _proxmox_cluster_summary: >-
-      {{ (_proxmox_cluster_status.stdout | from_json | selectattr('type', 'equalto', 'cluster') | list | first) | default({}) }}
-    _proxmox_cluster_members: >-
-      {{ _proxmox_cluster_status.stdout | from_json | selectattr('type', 'equalto', 'node') | list }}
+- name: Read local cluster membership
+  ansible.builtin.include_tasks: read_status.yml
 
 - name: Report Proxmox cluster status
   ansible.builtin.debug:
