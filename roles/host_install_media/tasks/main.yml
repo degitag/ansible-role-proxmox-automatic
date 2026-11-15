@@ -1,0 +1,79 @@
+---
+- name: Validate safe installer inputs and artifact naming
+  ansible.builtin.assert:
+    that:
+    - proxmox_host_installer_fqdn is match('^[a-z0-9][a-z0-9.-]*[.][a-z0-9]+$')
+    - proxmox_host_installer_sha256 is match('^[a-fA-F0-9]{64}$')
+    - proxmox_host_installer_management_mac is match('^(?:[a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$')
+    - proxmox_host_installer_disk_serial is match('^[A-Za-z0-9._:-]+$')
+    - proxmox_host_installer_root_hash is match('^[$](6|y)[$]')
+    - proxmox_host_installer_ssh_keys | length > 0
+    - proxmox_host_installer_output is match('^/.+')
+    fail_msg: Supply exact hardware identities, verified ISO SHA-256 and protected root access.
+  no_log: true
+
+- name: Inspect the source ISO with SHA-256
+  ansible.builtin.stat:
+    path: "{{ proxmox_host_installer_source }}"
+    checksum_algorithm: sha256
+    follow: true
+  register: _proxmox_host_installer_iso
+
+- name: Require the verified Proxmox ISO
+  ansible.builtin.assert:
+    that:
+    - _proxmox_host_installer_iso.stat.isreg | default(false)
+    - _proxmox_host_installer_iso.stat.checksum | lower == proxmox_host_installer_sha256 | lower
+
+- name: Derive the private image path from the verified source and answer
+  ansible.builtin.set_fact:
+    proxmox_host_installer_image: >-
+      {{ proxmox_host_installer_output ~ '/' ~ proxmox_host_installer_fqdn ~ '-' ~
+         ((proxmox_host_installer_sha256 | lower ~ ':' ~ (_answer | hash('sha256'))) | hash('sha256'))[:20] ~ '.iso' }}
+  vars:
+    _answer: "{{ lookup('ansible.builtin.template', 'answer.toml.j2') }}"
+  no_log: true
+
+- name: Ensure the ISO output directory is private
+  ansible.builtin.file:
+    path: "{{ proxmox_host_installer_output }}"
+    state: directory
+    mode: '0700'
+
+- name: Check whether this exact installer image exists
+  ansible.builtin.stat:
+    path: "{{ proxmox_host_installer_image }}"
+    get_checksum: false
+    get_mime: false
+  register: _proxmox_host_installer_image_state
+
+- name: Reject invalid existing artifacts
+  ansible.builtin.assert:
+    that:
+    - not _proxmox_host_installer_image_state.stat.exists or _proxmox_host_installer_image_state.stat.isreg
+    - not _proxmox_host_installer_image_state.stat.exists or _proxmox_host_installer_image_state.stat.mode == '0600'
+
+- name: Build a new answer-bound ISO when needed
+  ansible.builtin.include_tasks: build.yml
+  when:
+  - not _proxmox_host_installer_image_state.stat.exists
+  - not ansible_check_mode
+
+- name: Verify that Proxmox can inspect the final installation media
+  ansible.builtin.command:
+    argv: ["{{ proxmox_host_installer_assistant }}", inspect-iso, "{{ proxmox_host_installer_image }}"]
+  register: _proxmox_host_installer_inspected
+  check_mode: false
+  changed_when: false
+  when: _proxmox_host_installer_image_state.stat.exists or not ansible_check_mode
+
+- name: Verify the generated medium contains the intended hardware filters
+  ansible.builtin.assert:
+    that:
+    - _proxmox_host_installer_inspected.stdout is search('(?m)^Fetch mode:\s+iso$')
+    - ('fqdn = ' ~ (proxmox_host_installer_fqdn | to_json)) in _proxmox_host_installer_inspected.stdout_lines
+    - ('ID_SERIAL_SHORT = ' ~ (proxmox_host_installer_disk_serial | to_json)) in _proxmox_host_installer_inspected.stdout_lines
+    - ('ID_NET_NAME_MAC = ' ~ (_mac_match | to_json)) in _proxmox_host_installer_inspected.stdout_lines
+  vars:
+    _mac_match: "{{ 'enx' ~ (proxmox_host_installer_management_mac | lower | replace(':', '')) }}"
+  when: not _proxmox_host_installer_inspected.skipped | default(false)

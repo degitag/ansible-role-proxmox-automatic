@@ -1,0 +1,20 @@
+[global]
+keyboard = {{ proxmox_host_installer_keyboard | to_json(ensure_ascii=false) }}
+country = {{ proxmox_host_installer_country | to_json(ensure_ascii=false) }}
+fqdn = {{ proxmox_host_installer_fqdn | to_json(ensure_ascii=false) }}
+mailto = {{ proxmox_host_installer_contact | to_json(ensure_ascii=false) }}
+timezone = {{ proxmox_host_installer_timezone | to_json(ensure_ascii=false) }}
+root-password-hashed = {{ proxmox_host_installer_root_hash | to_json(ensure_ascii=false) }}
+root-ssh-keys = {{ proxmox_host_installer_ssh_keys | to_json(ensure_ascii=false) }}
+
+[network]
+source = "from-answer"
+cidr = {{ proxmox_host_installer_cidr | to_json(ensure_ascii=false) }}
+dns = {{ proxmox_host_installer_dns | to_json(ensure_ascii=false) }}
+gateway = {{ proxmox_host_installer_gateway | to_json(ensure_ascii=false) }}
+filter.ID_NET_NAME_MAC = {{ ('enx' ~ (proxmox_host_installer_management_mac | lower | replace(':', ''))) | to_json }}
+
+[disk-setup]
+filesystem = {{ proxmox_host_installer_filesystem | to_json }}
+filter-match = "all"
+filter.ID_SERIAL_SHORT = {{ proxmox_host_installer_disk_serial | to_json }}

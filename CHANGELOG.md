@@ -8,6 +8,7 @@
 - Thunderbolt-Rolle für persistente Schnittstellen und Ceph-Ethernet-Fallback.
 - Clusterweite Verwaltung von OpenID-Realms und Gruppenrechten.
 - Knoten-Zertifikatsrolle für PEM-Import, ACME und HTTPS-Prüfung.
+- Rolle zur Erzeugung geprüfter, hostbezogener Proxmox-VE-Installationsmedien.
 
 ## [0.2.0] - 2026-10-27
 
