@@ -47,7 +47,9 @@
     become: true
     when: inventory_hostname == proxmox_cluster_nodes[0]
     vars:
-      _migration_setting: "secure,network={{ proxmox_cluster_migration_network }}"
+      _migration_setting:
+        type: secure
+        network: "{{ proxmox_cluster_migration_network }}"
     block:
     - name: Read shared Proxmox datacenter options
       ansible.builtin.command:
@@ -58,11 +60,10 @@
 
     - name: Set encrypted migrations over the declared network
       ansible.builtin.command:
-        argv: [pvesh, set, /cluster/options, --migration, "{{ _migration_setting }}"]
+        argv: [pvesh, set, /cluster/options, --migration, "secure,network={{ _migration_setting.network }}"]
       changed_when: true
       when: >-
-        ((_proxmox_migration_before.stdout | from_json).migration | default('') |
-         replace('type=', '') | split(',') | sort) != (_migration_setting | split(',') | sort)
+        (_proxmox_migration_before.stdout | from_json).migration | default({}) != _migration_setting
 
     - name: Read the persisted migration configuration
       ansible.builtin.command:
@@ -71,6 +72,5 @@
       changed_when: false
       failed_when: >-
         _proxmox_migration_after.rc != 0 or
-        ((_proxmox_migration_after.stdout | from_json).migration | default('') |
-         replace('type=', '') | split(',') | sort) != (_migration_setting | split(',') | sort)
+        (_proxmox_migration_after.stdout | from_json).migration | default({}) != _migration_setting
       when: not ansible_check_mode
