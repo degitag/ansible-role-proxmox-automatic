@@ -6,6 +6,7 @@ well as a high Linux metric, so both Zebra and the kernel prefer OpenFabric.
 """
 import argparse
 import fcntl
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -48,12 +49,11 @@ def reconcile(config, check=False):
             metric('present', int(present), name)
             if present:
                 addresses = json.loads(run('ip', '-j', '-6', 'addr', 'show', 'dev', name))
-                expected = link['address'].split('/')[0]
-                # iproute emits compressed addresses; compare semantically.
-                import ipaddress
-                addressed = any(ipaddress.ip_address(a['local']) == ipaddress.ip_address(expected)
-                                for a in addresses[0]['addr_info'])
-                up = 'UP' in addresses[0]['flags']
+                interface = next(iter(addresses), {})
+                expected = ipaddress.ip_interface(link['address']).ip
+                addressed = any(ipaddress.ip_address(address['local']) == expected
+                                for address in interface.get('addr_info', []))
+                up = 'UP' in interface.get('flags', [])
                 if not addressed or not up or int((net / 'mtu').read_text()) != config['mtu']:
                     if check:
                         raise RuntimeError('interface configuration drift')
