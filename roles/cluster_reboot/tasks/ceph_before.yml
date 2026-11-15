@@ -1,0 +1,33 @@
+---
+- name: Read live Ceph state before stopping the node
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, status, --format, json]
+  register: _proxmox_reboot_ceph_before
+  failed_when: >-
+    _proxmox_reboot_ceph_before.rc != 0 or
+    (_proxmox_reboot_ceph_before.stdout | from_json).health.status != 'HEALTH_OK'
+  check_mode: false
+  changed_when: false
+
+- name: Read OSD IDs mapped to this host
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, ls-tree, "{{ inventory_hostname }}", --format, json]
+  register: _proxmox_reboot_ceph_osds
+  check_mode: false
+  changed_when: false
+
+- name: Check whether Ceph can stop all local OSDs together
+  ansible.builtin.command:
+    argv: "{{ ['timeout', '15', 'ceph', 'osd', 'ok-to-stop'] + (_ids | map('string') | list) }}"
+  vars:
+    _ids: "{{ _proxmox_reboot_ceph_osds.stdout | from_json }}"
+  check_mode: false
+  changed_when: false
+  when: _ids | length > 0
+
+- name: Verify that local monitor downtime preserves Ceph quorum
+  ansible.builtin.command:
+    argv: [timeout, '15', ceph, mon, ok-to-stop, "{{ inventory_hostname }}"]
+  check_mode: false
+  changed_when: false
+  when: inventory_hostname in (_proxmox_reboot_ceph_before.stdout | from_json).quorum_names

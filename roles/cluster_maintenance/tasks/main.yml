@@ -14,7 +14,7 @@
   - name: Verify one targeted live node in the intended quorate cluster
     ansible.builtin.assert:
       that:
-      - ansible_play_hosts_all | length == 1
+      - ansible_play_batch | length == 1
       - _cluster | selectattr('name', 'equalto', proxmox_maintenance_cluster) |
         selectattr('quorate', 'equalto', 1) | list | length == 1
       - _local | map(attribute='name') | list == [proxmox_maintenance_node]
