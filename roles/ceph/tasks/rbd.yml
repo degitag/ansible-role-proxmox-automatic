@@ -1,0 +1,112 @@
+---
+- name: Read replicated pools
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, pool, ls, --format, json]
+  become: true
+  register: _proxmox_ceph_pools
+  changed_when: false
+
+- name: Ensure replicated RBD pool exists
+  ansible.builtin.command:
+    argv:
+    - pveceph
+    - pool
+    - create
+    - "{{ proxmox_ceph_rbd_pool }}"
+    - --application
+    - rbd
+    - --size
+    - '3'
+    - --min_size
+    - '2'
+    - --pg_autoscale_mode
+    - 'on'
+    - --add_storages
+    - '0'
+  become: true
+  changed_when: true
+  when: proxmox_ceph_rbd_pool not in (_proxmox_ceph_pools.stdout | from_json)
+
+- name: Verify RBD pool parameters
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, pool, get, "{{ proxmox_ceph_rbd_pool }}", all, --format, json]
+  become: true
+  register: _proxmox_ceph_pool
+  changed_when: false
+  failed_when: >-
+    _proxmox_ceph_pool.rc != 0 or
+    (_proxmox_ceph_pool.stdout | from_json).size != 3 or
+    (_proxmox_ceph_pool.stdout | from_json).min_size != 2
+
+- name: Read Proxmox storage definitions
+  ansible.builtin.command:
+    argv: [pvesh, get, /storage, --output-format, json]
+  become: true
+  register: _proxmox_ceph_storages
+  changed_when: false
+
+- name: Ensure existing storage ID points to the managed RBD pool
+  ansible.builtin.assert:
+    that:
+    - item.type == 'rbd'
+    - item.pool == proxmox_ceph_rbd_pool
+    - not item.monhost | default('')
+    - item.nodes | default('') | split(',') | sort == proxmox_ceph_nodes | sort
+    - item.content | default('') | split(',') | sort == ['images', 'rootdir']
+  loop: "{{ _proxmox_ceph_storages.stdout | from_json | selectattr('storage', 'equalto', proxmox_ceph_rbd_pool) | list }}"
+  loop_control:
+    label: "{{ item.storage }}"
+
+- name: Register replicated RBD storage in Proxmox
+  ansible.builtin.command:
+    argv:
+    - pvesm
+    - add
+    - rbd
+    - "{{ proxmox_ceph_rbd_pool }}"
+    - --pool
+    - "{{ proxmox_ceph_rbd_pool }}"
+    - --content
+    - images,rootdir
+    - --nodes
+    - "{{ proxmox_ceph_nodes | join(',') }}"
+  become: true
+  changed_when: true
+  when: proxmox_ceph_rbd_pool not in (_proxmox_ceph_storages.stdout | from_json | map(attribute='storage') | list)
+
+- name: Wait for each managed OSD to be up and in
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, osd, dump, --format, json]
+  become: true
+  register: _proxmox_ceph_osd_dump
+  changed_when: false
+  retries: 30
+  delay: 5
+  until:
+  - _proxmox_ceph_osd_dump.rc == 0
+  - item | difference(_active_osds) | length == 0
+  loop: "{{ _expected_osds }}"
+  vars:
+    _expected_osds: >-
+      {{ proxmox_ceph_nodes | map('extract', hostvars) |
+         selectattr('_proxmox_ceph_osd_final.stdout', 'defined') |
+         map(attribute='_proxmox_ceph_osd_final.stdout') | map('from_json') |
+         map(attribute='existing_ids') | list }}
+    _active_osds: >-
+      {{ (_proxmox_ceph_osd_dump.stdout | from_json).osds |
+         selectattr('up', 'equalto', 1) | selectattr('in', 'equalto', 1) | map(attribute='osd') | list }}
+
+- name: Wait for clean placement groups
+  ansible.builtin.command:
+    argv: [timeout, '10', ceph, status, --format, json]
+  become: true
+  register: _proxmox_ceph_storage_health
+  changed_when: false
+  retries: 40
+  delay: 5
+  until:
+  - _proxmox_ceph_storage_health.rc == 0
+  - (_proxmox_ceph_storage_health.stdout | from_json).pgmap.num_pgs > 0
+  - >-
+    ((_proxmox_ceph_storage_health.stdout | from_json).pgmap.pgs_by_state |
+    rejectattr('state_name', 'equalto', 'active+clean') | list | length) == 0

@@ -1,2 +1,4 @@
 ---
 proxmox_ceph_repository: enterprise
+proxmox_ceph_osd_devices: []
+proxmox_ceph_rbd_pool: ''

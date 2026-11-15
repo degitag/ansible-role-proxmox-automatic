@@ -1,0 +1,29 @@
+---
+- name: Plan OSD creation from stable device identities
+  ansible.builtin.command:
+    argv: "{{ ['/usr/bin/python3', '-c', _proxmox_ceph_osd_probe, _proxmox_ceph_fsid.stdout | trim] + proxmox_ceph_osd_devices }}"
+  vars:
+    _proxmox_ceph_osd_probe: "{{ lookup('ansible.builtin.file', role_path ~ '/files/osd-plan.py') }}"
+  become: true
+  register: _proxmox_ceph_osd_plan
+  changed_when: false
+
+- name: Create explicitly selected empty OSD devices
+  ansible.builtin.command:
+    argv: [pveceph, osd, create, "{{ item }}"]
+  become: true
+  loop: "{{ (_proxmox_ceph_osd_plan.stdout | from_json).create }}"
+  changed_when: true
+  throttle: 1
+
+- name: Read OSD device ownership after provisioning
+  ansible.builtin.command:
+    argv: "{{ ['/usr/bin/python3', '-c', _proxmox_ceph_osd_probe, _proxmox_ceph_fsid.stdout | trim] + proxmox_ceph_osd_devices }}"
+  vars:
+    _proxmox_ceph_osd_probe: "{{ lookup('ansible.builtin.file', role_path ~ '/files/osd-plan.py') }}"
+  become: true
+  register: _proxmox_ceph_osd_final
+  changed_when: false
+  failed_when: >-
+    _proxmox_ceph_osd_final.rc != 0 or
+    (_proxmox_ceph_osd_final.stdout | from_json).existing_ids | length != proxmox_ceph_osd_devices | length

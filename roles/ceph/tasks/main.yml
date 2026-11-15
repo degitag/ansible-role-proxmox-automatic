@@ -53,3 +53,24 @@
     when:
     - inventory_hostname == proxmox_ceph_nodes[0]
     - not ansible_check_mode
+
+  - name: Read the active Ceph FSID
+    ansible.builtin.command:
+      argv: [timeout, '10', ceph, fsid]
+    become: true
+    register: _proxmox_ceph_fsid
+    changed_when: false
+    when: not ansible_check_mode
+
+  - name: Reconcile local Ceph OSDs
+    ansible.builtin.import_tasks: osd.yml
+    when:
+    - proxmox_ceph_osd_devices | length > 0
+    - not ansible_check_mode
+
+  - name: Reconcile shared RBD storage
+    ansible.builtin.import_tasks: rbd.yml
+    when:
+    - inventory_hostname == proxmox_ceph_nodes[0]
+    - proxmox_ceph_rbd_pool | length > 0
+    - not ansible_check_mode

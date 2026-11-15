@@ -33,3 +33,12 @@ argument_specs:
         choices: [enterprise, no-subscription, manual]
         default: enterprise
         description: Proxmox Ceph package repository.
+      proxmox_ceph_osd_devices:
+        type: list
+        elements: str
+        default: []
+        description: Persistent by-id paths of whole local devices allocated to Ceph.
+      proxmox_ceph_rbd_pool:
+        type: str
+        default: ''
+        description: Replicated RBD pool and Proxmox storage ID to provision.

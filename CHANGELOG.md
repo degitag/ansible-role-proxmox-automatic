@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 - Eigenständige Rolle zur lesenden Prüfung von Proxmox-Mitgliedschaft und Quorum sowie zum Bootstrap neuer Proxmox-Cluster.
-- Ceph-Einstieg für Paketinstallation, IPv6-Netzprüfung und Monitor-/Manager-Dienste.
+- Ceph-Einstieg für Paketinstallation, IPv6-Netzprüfung und Monitor-/Manager-Dienste sowie OSDs und replizierten RBD-Storage.
 
 ## [0.2.0] - 2026-10-27
 

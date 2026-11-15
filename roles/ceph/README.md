@@ -13,5 +13,9 @@ benennt den erwarteten Proxmox-Cluster. Das Repository wird über
 `proxmox_ceph_repository` gewählt. Bei einem vorhandenen Ceph-Cluster müssen
 die konfigurierten Netze mit den Sollwerten übereinstimmen.
 
-Der Einstieg deckt die Paketinstallation und die Monitor-/Manager-Dienste
-ab. Die Bereitstellung von OSDs, Pools und Proxmox-Storage folgt separat.
+Je Host benennt `proxmox_ceph_osd_devices` die vorgesehenen ganzen Datenträger
+unter `/dev/disk/by-id/`. Die Rolle akzeptiert leere Datenträger sowie bereits
+zum aktiven Ceph-FSID gehörige OSDs. Bei fremden Signaturen oder Partitionen
+bricht sie ab. Der optionale `proxmox_ceph_rbd_pool` konfiguriert einen
+replizierten Pool mit drei Kopien und Mindestgröße zwei und registriert ihn als
+Proxmox-Storage. Anschließend prüft die Rolle OSDs und Placement Groups.
