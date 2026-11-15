@@ -1,0 +1,90 @@
+---
+- name: Reconcile Proxmox node maintenance
+  become: true
+  vars:
+    _proxmox_maintenance_enabled: "{{ proxmox_maintenance_state == 'enabled' }}"
+  block:
+  - name: Read Proxmox membership on the selected node
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/status, --output-format, json]
+    register: _proxmox_maintenance_membership
+    check_mode: false
+    changed_when: false
+
+  - name: Verify one targeted live node in the intended quorate cluster
+    ansible.builtin.assert:
+      that:
+      - ansible_play_hosts_all | length == 1
+      - _cluster | selectattr('name', 'equalto', proxmox_maintenance_cluster) |
+        selectattr('quorate', 'equalto', 1) | list | length == 1
+      - _local | map(attribute='name') | list == [proxmox_maintenance_node]
+    vars:
+      _rows: "{{ _proxmox_maintenance_membership.stdout | from_json }}"
+      _cluster: "{{ _rows | selectattr('type', 'equalto', 'cluster') | list }}"
+      _local: >-
+        {{ _rows | selectattr('type', 'equalto', 'node') |
+           selectattr('local', 'equalto', 1) | selectattr('online', 'equalto', 1) | list }}
+
+  - name: Verify local HA services are running
+    ansible.builtin.command:
+      argv: [systemctl, is-active, "{{ item }}"]
+    loop: [pve-ha-crm.service, pve-ha-lrm.service]
+    check_mode: false
+    changed_when: false
+
+  - name: Read current HA manager and local resource manager state
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/ha/status/manager_status, --output-format, json]
+    register: _proxmox_maintenance_before
+    check_mode: false
+    changed_when: false
+
+  - name: Read the local clock for HA heartbeat validation
+    ansible.builtin.command:
+      argv: [date, '+%s']
+    register: _proxmox_maintenance_clock
+    check_mode: false
+    changed_when: false
+
+  - name: Check HA manager and local heartbeat freshness
+    ansible.builtin.assert:
+      that:
+      - _status.manager_status.master_node | default('') | length > 0
+      - (_now | int - _status.manager_status.timestamp | default(0) | int) | abs < 30
+      - (_now | int - _status.lrm_status[proxmox_maintenance_node].timestamp | default(0) | int) | abs < 30
+    vars:
+      _status: "{{ _proxmox_maintenance_before.stdout | from_json }}"
+      _now: "{{ _proxmox_maintenance_clock.stdout }}"
+
+  - name: Request the desired HA maintenance state
+    ansible.builtin.command:
+      argv: [ha-manager, crm-command, node-maintenance,
+             "{{ 'enable' if _proxmox_maintenance_enabled else 'disable' }}", "{{ proxmox_maintenance_node }}"]
+    changed_when: true
+    vars:
+      _manager: "{{ (_proxmox_maintenance_before.stdout | from_json).manager_status }}"
+      _request: "{{ (_manager.node_request | default({})).get(proxmox_maintenance_node, {}) }}"
+    when: _request.maintenance | default(false) | bool != _proxmox_maintenance_enabled
+
+  - name: Wait for the HA manager and local resource manager to converge
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/ha/status/manager_status, --output-format, json]
+    register: _proxmox_maintenance_after
+    changed_when: false
+    retries: 40
+    delay: 5
+    until:
+    - _proxmox_maintenance_after.rc == 0
+    - _status.quorum.quorate | bool
+    - _request.maintenance | default(false) | bool == _proxmox_maintenance_enabled
+    - _lrm.mode | default('') == ('maintenance' if _proxmox_maintenance_enabled else 'active')
+    - not _proxmox_maintenance_enabled or _remaining_services | length == 0
+    vars:
+      _status: "{{ _proxmox_maintenance_after.stdout | from_json }}"
+      _request: "{{ (_status.manager_status.node_request | default({})).get(proxmox_maintenance_node, {}) }}"
+      _lrm: "{{ (_status.lrm_status | default({})).get(proxmox_maintenance_node, {}) }}"
+      _remaining_services: >-
+        {{ (_status.manager_status.service_status | default({})).values() |
+           selectattr('node', 'defined') | selectattr('node', 'equalto', proxmox_maintenance_node) |
+           rejectattr('state', 'in', ['stopped', 'disabled']) | list }}
+    when: not ansible_check_mode
