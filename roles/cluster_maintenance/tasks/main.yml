@@ -39,6 +39,13 @@
     check_mode: false
     changed_when: false
 
+  - name: Check for configured HA resources before accepting an idle manager
+    ansible.builtin.command:
+      argv: [pvesh, get, /cluster/ha/resources, --output-format, json]
+    register: _proxmox_maintenance_resources
+    check_mode: false
+    changed_when: false
+
   - name: Read the local clock for HA heartbeat validation
     ansible.builtin.command:
       argv: [date, '+%s']
@@ -50,7 +57,10 @@
     ansible.builtin.assert:
       that:
       - _status.manager_status.master_node | default('') | length > 0
-      - (_now | int - _status.manager_status.timestamp | default(0) | int) | abs < 30
+      - >-
+        (_now | int - _status.manager_status.timestamp | default(0) | int) | abs < 30 or
+        ((_proxmox_maintenance_resources.stdout | from_json | length == 0) and
+        (_status.manager_status.service_status | default({}) | length == 0))
       - (_now | int - _status.lrm_status[proxmox_maintenance_node].timestamp | default(0) | int) | abs < 30
     vars:
       _status: "{{ _proxmox_maintenance_before.stdout | from_json }}"
